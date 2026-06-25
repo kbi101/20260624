@@ -184,7 +184,8 @@ flowchart TB
 
     GL --> PE
     GL --> TC
-    PE -.-> SYS```
+    PE -.-> SYS
+```
 
 ## Features
 
