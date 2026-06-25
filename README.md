@@ -86,10 +86,10 @@ flowchart TB
     subgraph CORE["ReAct Agent Loop — agent.py"]
         SYS["_build_system_prompt<br/>tools list + heuristics hint + RAG memory"]
         WM["WorkingMemory<br/>sliding window, 6000 tokens"]
-        REACT{for iter in max_iterations}
+        REACT{"for iter in max_iterations"}
         LLM1["LLMClient.chat()<br/>→ gemma4:12b via Ollama"]
         PARSE["_parse_response"]
-        PARSETYPE{parse result}
+        PARSETYPE{"parse result"}
         EXEC["_execute_tool → tool.execute()"]
         CRIT["Critic.review<br/>loose / moderate / strict"]
         ANAL["Analyzer.record<br/>success / error / critic_rejected"]
@@ -111,8 +111,8 @@ flowchart TB
     end
 
     subgraph MEMORY["ChromaDB — data/vector_store/"]
-        FC[facts collection]
-        LC[lessons collection]
+        FC["facts collection"]
+        LC["lessons collection"]
     end
 
     subgraph EMBED["Embedding Service"]
@@ -139,8 +139,8 @@ flowchart TB
     INT --> RAG
     ARG --> RAG
 
-    RAG --> |multi-agent| RA
-    RAG --> |single agent| SYS
+    RAG --> |"multi-agent"| RA
+    RAG --> |"single agent"| SYS
 
     RA --> CLASS --> SUBF --> SYS
     SUBF --> FIN
@@ -152,7 +152,7 @@ flowchart TB
     PARSE --> PARSETYPE
     
     PARSETYPE --> |"final answer OR (action + input)"| YIELD_EVENT
-    PARSETYPE --> |action| EXEC
+    PARSETYPE --> |"action"| EXEC
 
     EXEC --> WS
     EXEC --> WF
@@ -166,13 +166,13 @@ flowchart TB
     WF --> BM
 
     EXEC --> CRIT
-    CRIT --> |reject| REACT
-    CRIT --> |accept| ANAL --> YIELD_EVENT
+    CRIT --> |"reject"| REACT
+    CRIT --> |"accept"| ANAL --> YIELD_EVENT
     YIELD_EVENT --> WM --> REACT
 
-    REACT --> |timeout| FALLBACK[LLM fallback answer]
+    REACT --> |"timeout"| FALLBACK["LLM fallback answer"]
 
-    INT -.->|on quit| RF
+    INT -.->|"on quit"| RF
     RF --> CS
     CS --> OM
     CS --> FC
