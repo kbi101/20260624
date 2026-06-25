@@ -1,7 +1,7 @@
 """Web search by typing into DuckDuckGo via Playwright + real Chrome.
 
-Opens a new tab → types query into DDG → hits Enter → extracts results.
-Works because DuckDuckGo doesn't block regular Chrome instances."""
+Opens a new tab → types query into DDG → hits Enter → extracts results →
+ranks them with learned heuristics so preferred sources surface first."""
 
 import re
 import time
@@ -25,19 +25,16 @@ class WebSearch(Tool):
     def execute(self, query: str, max_results: int = 8) -> str:
         page = get_page(30)
         try:
-            # Navigate to DuckDuckGo main site (not html endpoint)
             page.goto("https://duckduckgo.com/", wait_until="domcontentloaded")
 
-            # Fill search box and submit
             with page.expect_navigation(wait_until="domcontentloaded", timeout=15000):
                 page.fill('input[name="q"]', query)
                 page.keyboard.press("Enter")
 
-            time.sleep(1)  # let results paint
+            time.sleep(1)
 
             results = []
 
-            # Main results live under .results--main > article > h2 > a
             articles = page.query_selector_all(".results--main article")[:max_results]
             for article in articles:
                 title_el = article.query_selector("h2 a")
@@ -46,7 +43,6 @@ class WebSearch(Tool):
                 title = title_el.inner_text() if title_el else ""
                 href = (link_el or title_el).get_attribute("href") if (link_el or title_el) else ""
 
-                # Snippet: find any span/text under the result
                 snippet = ""
                 for sel in ["span:not([class])", "p", ".snippet"]:
                     s = article.query_selector(sel)
@@ -55,7 +51,6 @@ class WebSearch(Tool):
                         snippet = raw.strip()[:400]
                         break
 
-                # Fallback: grab remaining text from the article, minus title/header nav
                 if not snippet and title:
                     all_txt = (article.inner_text() or "").replace(title, "").strip()
                     lines = [l for l in all_txt.split("\n") if len(l.strip()) > 20]
@@ -65,13 +60,11 @@ class WebSearch(Tool):
                 if title and href:
                     results.append((title, href, snippet))
 
-            # Also grab the "now card" / instant answer content (weather, stocks etc)
             now_card = page.query_selector("[data-no-defer]")
             if not results and now_card:
                 extra_text = now_card.inner_text()[:600]
                 return f"Instant result:\n{extra_text}"
 
-            # Fallback: scrape all external links off the body
             if not results:
                 for a in page.query_selector_all('a[href^="http"]')[:max_results * 3]:
                     href = a.get_attribute("href") or ""
@@ -79,12 +72,52 @@ class WebSearch(Tool):
                     if "duckduckgo.com" not in href and len(text_clean) > 25:
                         results.append((text_clean[:150], href, ""))
 
+            # Re-rank results using learned heuristics
+            results = self._rerank(query, results)
+
             return self._format(query, results)
 
         except Exception as e:
             return f"Search failed: {e}"
         finally:
             page.close()
+
+    def _rerank(self, query: str, results: list) -> list:
+        """Boost results that match learned heuristic sources to the top."""
+        try:
+            from morphos.heuristics import HeuristicEngine
+            engine = HeuristicEngine()
+            matched = engine.match(query)
+            if not matched:
+                return results
+
+            preferred_domains = []
+            for h in matched:
+                ps = h.get("preferred_source", "")
+                # Extract domain from preferred source
+                try:
+                    from urllib.parse import urlparse
+                    d = urlparse(ps).netloc or ""
+                    preferred_domains.append(d)
+                except Exception:
+                    pass
+
+            if not preferred_domains:
+                return results
+
+            def score(r):
+                href = r[1]
+                for dom in preferred_domains:
+                    if dom and re.search(re.escape(dom), href, re.IGNORECASE):
+                        return 0  # highest priority
+                return 1
+
+            boosted = [r for r in results if score(r) == 0]
+            rest = [r for r in results if score(r) == 1]
+            return boosted + rest
+
+        except Exception:
+            return results
 
     @staticmethod
     def _format(query: str, results: list[tuple[str, str, str]]) -> str:

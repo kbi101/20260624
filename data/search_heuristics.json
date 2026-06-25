@@ -1,0 +1,27 @@
+{
+  "description": "Query-pattern to preferred-source mappings. Learned from successful sessions or added manually.",
+  "heuristics": [
+    {
+      "pattern": "(earnings date|earnings release|earnings calendar|er date)",
+      "ticker_hint": true,
+      "preferred_source": "https://www.marketbeat.com/stocks/{exchange}/{ticker}/earnings/",
+      "fallback_pattern": "https://www.zacks.com/stock/research/{ticker}/earnings-calendar",
+      "exchange_default": "NASDAQ",
+      "example": "PEP's next earnings date → https://www.marketbeat.com/stocks/NASDAQ/PEP/earnings/",
+      "notes": "marketbeat loads data via JS but is reliably rendered by Playwright; yfinance and finance tools return stale ER dates"
+    },
+    {
+      "pattern": "(stock price|current price|what does .* cost|.* trading)",
+      "ticker_hint": true,
+      "preferred_source": "yfinance (use the `finance` tool)",
+      "fallback_pattern": null,
+      "notes": "the finance tool uses yfinance which is unblocked and fast; avoid scraping Yahoo Finance HTML"
+    },
+    {
+      "pattern": "(weather|forecast|temperature .* today)",
+      "preferred_source": "https://forecast.weather.gov/MapClick.php?CityName={city}&lat={lat}&lon={lon}",
+      "fallback_pattern": null,
+      "notes": "weather.gov works from this IP; search for the city name then fetch directly"
+    }
+  ]
+}

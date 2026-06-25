@@ -104,3 +104,21 @@ Tested both queries successfully:
 
 **Q:** App crashes on startup with `ImportError: cannot import name 'DynamicToolRegistry' from 'morphos.dynamic_tools'`, then second error: `cannot import name 'save_dynamic_tools'`.
 **A:** Three fixes in `dynamic_tools.py`: (1) renamed class `DynamicRegistry` → `DynamicToolRegistry`, (2) added `persist_dir` constructor param and `tools` property, (3) added `save_dynamic_tools()` function, (4) added `load_from_file_into()` method so loaded tools persist in the existing registry instead of being lost in a new instance. Import chain now resolves cleanly.
+
+## 2026-06-25T01:20:00+00:00 — Phase 4 Autonomous Growth implementation
+
+**Q:** User asked to start working on Phase 4.
+**A:** Implemented all 4 Phase 4 components per spec/004-AutonomousGrowth.md:
+- `morphos/self_improve/prompt_evolver.py` — scans analyzer logs, uses LLM to propose system prompt patches for failure patterns
+- `morphos/self_improve/tool_curator.py` — promotes high-success dynamic tools, demotes chronic failures
+- `morphos/self_improve/growth_loop.py` — orchestrates both, produces growth reports saved to disk
+- `morphos/multi_agent.py` — RouterAgent classifies queries (FINANCE/RESEARCH/CODING), dispatches to specialized sub-agents
+- Updated `config.py` with `auto_evolve`, `auto_growth`, `multi_agent` flags
+- Updated `cli.py` with `--grow`, `--auto-evolve`, `--multi-agent` CLI flags; added `routed` event handler
+- Fixed `critic.py`: added `strictness` param, strictness-specific prompts, and `review()` method matching agent call site
+Also fixed `__init__.py` that had been written with literal text instead of being empty.
+
+## 2026-06-25T01:35:00+00:00 — Git init + .gitignore
+
+**Q:** User asked to make a snapshot of the project, then asked if git is enabled.
+**A:** Init git repo, committed all files (83 files), created `.gitignore` excluding `__pycache__/`, ChromaDB vector store data, log files, and growth reports.

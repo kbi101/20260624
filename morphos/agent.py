@@ -13,6 +13,7 @@ from morphos.config import Config
 from morphos.critic import Critic
 from morphos.analyzer import Analyzer
 from morphos.dynamic_tools import DynamicToolRegistry
+from morphos.heuristics import HeuristicEngine
 
 
 SYSTEM_PROMPT = r"""You are an AI assistant. You must output exactly one of these two formats each turn:
@@ -90,6 +91,7 @@ class ReActAgent:
         if self.memory is None:
             self.memory = WorkingMemory(max_tokens=6000)
 
+        self.heuristics = HeuristicEngine()
         self.analyzer = Analyzer()
         self.critic = None
         if self.config.critic_enabled:
@@ -109,6 +111,12 @@ class ReActAgent:
     def _build_system_prompt(self, query_text: str = "") -> str:
         tools_info = "\n".join(f"- **{name}**: {desc}" for name, desc in self.registry.list_tools())
         prompt = SYSTEM_PROMPT.format(tools_list=tools_info)
+
+        # Inject learned source heuristics into the prompt
+        if query_text:
+            hint = self.heuristics.build_prompt_hint(query_text)
+            if hint:
+                prompt += "\n" + hint
 
         if self.store and query_text:
             memories = self.store.query(query_text, n_results=self.rag_retrieval_count)

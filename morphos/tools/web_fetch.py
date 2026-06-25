@@ -32,8 +32,13 @@ class WebFetch(Tool):
         page = get_page(self.timeout)
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
-            # Give JS a moment to render dynamic content
-            page.wait_for_timeout(2000)
+            # Wait for JS-driven content to load (network idle or fallback timeout)
+            try:
+                page.wait_for_load_state("networkidle", timeout=8000)
+            except Exception:
+                pass
+            page.wait_for_timeout(3000)
+
             title = page.title() or ""
             body_html = page.inner_html("body")
 
@@ -47,7 +52,19 @@ class WebFetch(Tool):
             lines = [l.strip() for l in text.splitlines() if l.strip()]
             cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(lines))
 
-            return f"[{final_title}]\n{cleaned[:6000]}"
+            # If readability missed content (e.g., SPA with injected DOM),
+            # fall back to raw inner_text which captures JS-rendered nodes
+            result_text = cleaned.rstrip()
+            if len(result_text) < 200 or "sms" in result_text.lower()[:100]:
+                title2 = page.title() or final_title
+                raw_text = page.inner_text("body") or ""
+                rlines = [l.strip() for l in raw_text.splitlines() if l.strip()]
+                fallback = re.sub(r"\n{3,}", "\n\n", "\n".join(rlines))
+                if len(fallback) > len(result_text):
+                    final_title = title2
+                    result_text = fallback
+
+            return f"[{final_title}]\n{result_text[:6000]}"
 
         except Exception as e:
             # Grab whatever rendered so far before the error

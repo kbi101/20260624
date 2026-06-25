@@ -136,7 +136,11 @@ def _run_reflection(messages: list[dict], store: ChromaStore):
         from morphos.llm import LLMClient
         reflector = Reflector(chroma_store=store, llm_client=LLMClient(model="gemma4:12b"))
         stats = reflector.reflect(messages, session_id=_session_id)
-        console.print(f"[dim]Stored {stats['facts_stored']} facts, {stats['lessons_stored']} lessons.[/dim]")
+        parts = [f"{stats['facts_stored']} facts", f"{stats['lessons_stored']} lessons"]
+        hl = stats.get('heuristics_learned', 0)
+        if hl:
+            parts.append(f"{hl} source heuristic(s)")
+        console.print(f"[dim]Stored {', '.join(parts)}.[/dim]")
     except Exception as e:
         console.print(f"[dim red]Reflection skipped: {e}[/dim red]")
 
