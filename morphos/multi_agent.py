@@ -87,8 +87,11 @@ class RouterAgent:
         """Get or create a sub-agent instance for the given domain."""
         if domain not in self._instances:
             sconfig = self.sub_agents.get(domain)
-            agent = self.agent_factory(config=config, system_addon=sconfig.system_prompt_addon)
-            agent._domain_tools = sconfig.allowed_tools or None
+            agent = self.agent_factory(
+                config=config,
+                system_addon=sconfig.system_prompt_addon,
+                allowed_tools=sconfig.allowed_tools or None,
+            )
             self._instances[domain] = agent
         return self._instances[domain]
 

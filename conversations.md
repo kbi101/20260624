@@ -118,7 +118,37 @@ Tested both queries successfully:
 - Fixed `critic.py`: added `strictness` param, strictness-specific prompts, and `review()` method matching agent call site
 Also fixed `__init__.py` that had been written with literal text instead of being empty.
 
+## 2026-06-25T02:50:00+00:00 — What did we do so far?
+
+**Q:** User asked for status.
+**A:** Summarized all Phases 1–4 work, open items, and critical context.
+
+## 2026-06-25T02:55:00+00:00 — Continue fixing multi-agent wiring
+
+**Q:** User asked to continue.
+**A:** Fixed three bugs in `cli.py` multi-agent branch: (1) factory lambda was swallowing kwargs, so sub-agents got full tool set and no system prompt addon; (2) `_domain_tools` attribute was assigned post-registration with mismatched param name; (3) multi-agent path had no return, crashing reflection. Refactored `make_agent` signature to `(config=None, system_addon=None, allowed_tools=None)`, tool filtering now happens upfront in the loop. Returns actual sub-agent so `run_interactive` reflection works. Updated `RouterAgent.get_agent()` to pass `allowed_tools` directly to factory. All imports verified clean.
+
 ## 2026-06-25T01:35:00+00:00 — Git init + .gitignore
 
 **Q:** User asked to make a snapshot of the project, then asked if git is enabled.
 **A:** Init git repo, committed all files (83 files), created `.gitignore` excluding `__pycache__/`, ChromaDB vector store data, log files, and growth reports.
+
+## 2026-06-25T13:20:00+00:00 — Persistent Chrome profile research & rollback
+
+**Q:** User wanted Playwright to reuse a fixed Chrome profile to avoid login/CAPTCHA issues on repeated searches.
+**A:** Researched Playwright docs. Replaced `launch` + `new_context` with `launch_persistent_context`. First tried project-local profile (`data/chrome_profile/`) — search worked via python.org. User then requested using real Chrome profile path (`~/Library/Application Support/Google/Chrome/Default`). Attempted but it broke Google login (Playwright conflicts with running Chrome instance locking the profile). Fully rolled back to original `launch` + `new_context` approach. Cleaned up dead profile directory and removed `chrome_user_data_dir` from Config.
+
+## 2026-06-25T13:25:00+00:00 — System internals explanation
+
+**Q:** User asked what happens after fetching a webpage, what is cached, how reflection works, and who does embedding.
+**A:** Documented full flow: fetch → networkidle → readability extraction → BeautifulSoup text → 6000 char cap → back to agent as observation string. Only ChromaDB vectors are cached (no web page cache). Reflection happens once at session exit via Reflector LLM pass extracting facts/lessons/heuristics. Embedding: `nomic-embed-text` served by local Ollama, called from `chroma_store.py`.
+
+## 2026-06-25T13:30:00+00:00 — Mermaid architecture diagram
+
+**Q:** User requested a detailed mermaid diagram of the full system.
+**A:** Wrote `spec/diagram1.md` with flowchart covering all subgraphs (CLI, routing, ReAct loop, web tools, data tools, memory/ChromaDB, embedding, reflection, growth cycle, heuristics), component table, and three workflow summaries (single query, session exit, growth cycle).
+
+## 2026-06-25T13:40:00+00:00 — README rewrite for GitHub push
+
+**Q:** User asked to update README.md with full feature docs, architecture diagram, screenshot placeholders, tech stack, and dev tool credits before pushing to GitHub.
+**A:** Wrote comprehensive README with: ASCII workflow diagram + mermaid flowchart (GitHub-renderable), all 8 feature sections, tool reference table, project structure tree, phase roadmap with spec links, tech stack table (Ollama/gemma4:12b, nomic-embed-text, Playwright/Chrome, ChromaDB, Rich, yfinance), and "Built With" section crediting opencode + qwen3.6:27b as the dev toolchain.

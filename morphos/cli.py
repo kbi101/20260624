@@ -36,7 +36,29 @@ CRITIC_REJECT_STYLE = "bold magenta"
 _session_id = str(uuid.uuid4())[:8]
 
 
-def make_agents(config: Config) -> ReActAgent:
+def _register_tool(agent, tool):
+    """Register a single tool on an agent."""
+    agent.register_tool(tool)
+
+
+ALL_TOOLS = {
+    "python_exec": lambda cfg: PythonExec(timeout=cfg.python_timeout),
+    "web_fetch": lambda cfg: WebFetch(timeout=cfg.web_timeout),
+    "web_search": lambda _c: WebSearch(),
+    "finance": lambda _c: Finance(),
+    "file_read": lambda _c: FileRead(),
+    "file_write": lambda _c: FileWrite(),
+    "directory_search": lambda _c: DirectorySearch(),
+    "calculator": lambda _c: Calculator(),
+}
+
+
+def make_agent(config=None, system_addon=None, allowed_tools=None):
+    """Create a single agent, optionally with narrowed tool set and prompt addon."""
+    from morphos.memory.chroma_store import ChromaStore
+    if config is None:
+        from morphos.config import Config
+        config = Config()
     store = ChromaStore()
     agent = ReActAgent(
         model=config.model,
@@ -44,52 +66,84 @@ def make_agents(config: Config) -> ReActAgent:
         config=config,
         store=store,
     )
-    agent.register_tool(PythonExec(timeout=config.python_timeout))
-    agent.register_tool(WebFetch(timeout=config.web_timeout))
-    agent.register_tool(WebSearch())
-    agent.register_tool(Finance())
-    agent.register_tool(FileRead())
-    agent.register_tool(FileWrite())
-    agent.register_tool(DirectorySearch())
-    agent.register_tool(Calculator())
+
+    tools_to_register = set(allowed_tools) if allowed_tools else set(ALL_TOOLS.keys())
+    for tname, factory in ALL_TOOLS.items():
+        if tname in tools_to_register:
+            _register_tool(agent, factory(config))
+    if "memory_search" in tools_to_register:
+        ms = MemorySearch(store=store)
+        agent.register_tool(ms)
+
+    if system_addon:
+        agent._system_prompt_addon = system_addon
+
+    return agent
+
+
+def make_agents(config: Config):
+    """Backward compat — creates full agent + store."""
+    store = ChromaStore()
+    agent = make_agent(config)
     ms = MemorySearch(store=store)
     agent.register_tool(ms)
     return agent, store
 
 
-def run_agent(query: str, config: Config):
-    agent, store = make_agents(config)
+def _handle_event(event_type, payload):
+    """Print a single event from the agent loop."""
+    if event_type == "llm_response":
+        thought_match = re.search(r"Thought:\s*(.+?)(?:\n|$)", payload, re.DOTALL)
+        if thought_match:
+            console.print(Panel(Text(thought_match.group(1).strip(), style=THOUGHT_STYLE), title="[dim]Thought"))
+    elif event_type == "tool_result":
+        tool_name, result = payload
+        console.print(Panel(Text(result[:500], style=RESULT_STYLE), title=f"[bold yellow]{tool_name}"))
+    elif event_type == "tool_error":
+        console.print(Text(payload, style=ERROR_STYLE))
+    elif event_type == "error":
+        console.print(Text(payload, style=ERROR_STYLE))
+    elif event_type == "final_answer":
+        console.print(Panel(Markdown(payload), title="[green]Final Answer", border_style="green"))
+    elif event_type == "critic":
+        tool_name, verdict = payload
+        if verdict == "accept":
+            console.print(f"[dim green]✓ Critic accepted output from {tool_name}[/]")
+        else:
+            console.print(f"[bold magenta]✗ Critic rejected output from {tool_name} — retrying...[/]")
+    elif event_type == "critic_reject":
+        console.print(Text(payload, style=CRITIC_REJECT_STYLE))
+    elif event_type == "timeout":
+        console.print(Text(payload, style=ERROR_STYLE))
+    elif event_type == "routed":
+        console.print(f"[bold blue]🔀 Routed to {payload}[/]")
 
+
+def run_agent(query: str, config: Config):
     console.print(Panel(Text(query, style="bold"), title="[blue]User Query"))
 
-    for event_type, payload in agent.run(query):
-        if event_type == "llm_response":
-            thought_match = re.search(r"Thought:\s*(.+?)(?:\n|$)", payload, re.DOTALL)
-            if thought_match:
-                console.print(Panel(Text(thought_match.group(1).strip(), style=THOUGHT_STYLE), title="[dim]Thought"))
-        elif event_type == "tool_result":
-            tool_name, result = payload
-            console.print(Panel(Text(result[:500], style=RESULT_STYLE), title=f"[bold yellow]{tool_name}"))
-        elif event_type == "tool_error":
-            console.print(Text(payload, style=ERROR_STYLE))
-        elif event_type == "error":
-            console.print(Text(payload, style=ERROR_STYLE))
-        elif event_type == "final_answer":
-            console.print(Panel(Markdown(payload), title="[green]Final Answer", border_style="green"))
-        elif event_type == "critic":
-            tool_name, verdict = payload
-            if verdict == "accept":
-                console.print(f"[dim green]✓ Critic accepted output from {tool_name}[/]")
-            else:
-                console.print(f"[bold magenta]✗ Critic rejected output from {tool_name} — retrying...[/]")
-        elif event_type == "critic_reject":
-            console.print(Text(payload, style=CRITIC_REJECT_STYLE))
-        elif event_type == "timeout":
-            console.print(Text(payload, style=ERROR_STYLE))
-        elif event_type == "routed":
-            console.print(f"[bold blue]🔀 Routed to {payload}[/]")
+    if config.multi_agent:
+        from morphos.multi_agent import RouterAgent
+        from morphos.llm import LLMClient
+        router = RouterAgent(
+            llm_client=LLMClient(model=config.model),
+            agent_factory=make_agent,
+        )
+        last_domain = None
+        final_agent = None
+        for event_type, payload in router.dispatch(query, config):
+            if event_type == "routed":
+                last_domain = payload
+            _handle_event(event_type, payload)
+        if last_domain:
+            final_agent = router.get_agent(last_domain, config)
+        return final_agent
 
-    return agent
+    else:
+        agent, store = make_agents(config)
+        for event_type, payload in agent.run(query):
+            _handle_event(event_type, payload)
+        return agent
 
 
 def run_interactive(config: Config):

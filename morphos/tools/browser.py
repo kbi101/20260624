@@ -18,8 +18,6 @@ class BrowserManager:
     def ensure(self):
         if self._browser is None:
             self._pwt = sync_playwright().start()
-            # Use regular Chrome — less likely to be flagged as a bot than headless
-            path = self._pwt.chromium.executable_path
             self._browser = self._pwt.chromium.launch(
                 headless=False,
                 channel="chrome",

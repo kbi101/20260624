@@ -73,6 +73,8 @@ class GrowthLoop:
             promoted = tc.get("promoted", [])
             removed = tc.get("removed", [])
             lines.append(f"  Tool Curation — promoted: {promoted}, removed: {removed}")
+        else:
+            lines.append("  Tool Curation — skipped (no dynamic tools / no analyzer logs)")
 
         return "\n".join(lines)
 
