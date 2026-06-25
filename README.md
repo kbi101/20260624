@@ -71,33 +71,120 @@ playwright install   # downloads browser binaries if needed
 
 ```mermaid
 flowchart TB
-    CLI[Terminal<br/>CLI + REPL] --> Router{-multi-agent?}
-    Router -- yes --> Classify[LLM classify →<br/>FINANCE / RESEARCH<br/>/ CODING]
-    Router -- no --> Agent
-    Classify --> SubAgent{Specialized Agent}
+    subgraph CLI["cli.py — Entry Point"]
+        ARG["Argument Parser<br/>--query / --multi-agent<br/>--grow / --auto-evolve"]
+        INT["run_interactive<br/> REPL loop with readline history"]
+        RAG["run_agent<br/> dispatches to agent or router"]
+    end
 
-    Agent[ReAct Loop] --> BuildPrompt[System Prompt Builder<br/>tools + RAG memory<br/>+ heuristic hints]
-    SubAgent --> BuildPrompt
+    subgraph ROUTING["Multi-Agent Routing (Optional)"]
+        RA["multi_agent.py<br/>RouterAgent"]
+        CLASS["LLM classify query →<br/>FINANCE / RESEARCH / CODING"]
+        SUBF["agent_factory → make_agent<br/>with narrowed tools + prompt addon"]
+    end
 
-    BuildPrompt --> LLM[gemma4:12b via Ollama]
-    LLM --> Parse{Parse response}
-    Parse -- Final Answer --> Render[Rich CLI rendering]
-    Parse -- Action --> ToolExec[Execute tool]
-    ToolExec --> Critic[LLM quality<br/>validation]
-    Critic -- reject --> LLM
-    Critic -- accept --> Record[Analyzer records<br/>duration + status]
-    Record --> MemoryStore[(Working Memory<br/>6000 token window)]
-    MemoryStore --> LLM
+    subgraph CORE["ReAct Agent Loop — agent.py"]
+        SYS["_build_system_prompt<br/>tools list + heuristics hint + RAG memory"]
+        WM["WorkingMemory<br/>sliding window, 6000 tokens"]
+        REACT{for iter in max_iterations}
+        LLM1["LLMClient.chat()<br/>→ gemma4:12b via Ollama"]
+        PARSE["_parse_response"]
+        PARSETYPE{parse result}
+        EXEC["_execute_tool → tool.execute()"]
+        CRIT["Critic.review<br/>loose / moderate / strict"]
+        ANAL["Analyzer.record<br/>success / error / critic_rejected"]
+        YIELD_EVENT["yield event (tool_result<br/>thought / critic / final_answer)"]
+    end
 
-    CLI -. quit .-> Reflector[Session Reflection<br/>extract facts, lessons,<br/>source heuristics]
-    Reflector --> FactStore[(ChromaDB<br/>facts collection)]
-    Reflector --> LessonStore[(ChromaDB<br/>lessons collection)]
-    Reflector --> HeuristicFile[search_heuristics.json]
+    subgraph WEB_TOOLS["Web Tools — Playwright Chrome"]
+        WS["web_search.py<br/>types into duckduckgo.com,<br/>scrapes results, heuristic rerank"]
+        WF["web_fetch.py<br/>page.goto → networkidle →<br/>readability.Document →<br/>BeautifulSoup get_text → 6000 chars"]
+        BM["browser.py<br/>singleton BrowserManager<br/>launch channel=chrome,<br/>shared BrowserContext"]
+    end
 
-    ToolExec -->|web_search<br/>(duckduckgo.com)| Chrome[Playwright +<br/>real Chrome browser]
-    ToolExec -->|finance| yf[yfinance library]
-    ToolExec -->|memory_search| FactStore
-```
+    subgraph DATA_TOOLS["Data & Compute Tools"]
+        FIN["finance.py<br/>yfinance — ticker price/volume<br/>IP-safe, no scraping needed"]
+        PYE["python_exec.py<br/>sandboxed exec with timeout"]
+        CALC["calculator.py<br/>AST-safe math eval"]
+        FOP["file_ops.py<br/>FileRead + FileWrite path whitelist"]
+        DIRS["directory_search.py<br/>glob pattern on local files"]
+    end
+
+    subgraph MEMORY["ChromaDB — data/vector_store/"]
+        FC[facts collection]
+        LC[lessons collection]
+    end
+
+    subgraph EMBED["Embedding Service"]
+        OM["nomic-embed-text<br/>served by local Ollama"]
+        CS["chroma_store.py<br/>add_fact / add_lesson / query"]
+    end
+
+    subgraph REFLECTION["Session Reflection — On Exit"]
+        RF["reflector.py<br/>LLM extracts: facts, lessons,<br/>source heuristics from messages"]
+        HEUR_J["data/search_heuristics.json<br/>pattern → preferred URL mapping"]
+    end
+
+    subgraph GROWTH["Growth Cycle — --grow Flag"]
+        PE["prompt_evolver.py<br/>scans analyzer logs → prompt patches"]
+        TC["tool_curator.py<br/>promote high-success / demote failures"]
+        GL["growth_loop.py<br/>orchestrates, saves JSON report"]
+    end
+
+    subgraph HEURISTICS["Source Heuristics Runtime"]
+        HENG["heuristics.py<br/>HeuristicEngine<br/>regex match query → URL template"]
+    end
+
+    ARG --> INT
+    INT --> RAG
+    ARG --> RAG
+
+    RAG --> |multi-agent| RA
+    RAG --> |single agent| SYS
+
+    RA --> CLASS --> SUBF --> SYS
+    SUBF --> FIN
+    SUBF --> WS
+    SUBF --> PYE
+
+    SYS --> WM
+    WM --> REACT --> LLM1 --> PARSE
+    PARSE --> PARSETYPE
+    
+    PARSETYPE --> |"final answer OR (action + input)"| YIELD_EVENT
+    PARSETYPE --> |action| EXEC
+
+    EXEC --> WS
+    EXEC --> WF
+    EXEC --> FIN
+    EXEC --> PYE
+    EXEC --> CALC
+    EXEC --> MS["memory_search.py<br/>query ChromaDB by embedding"]
+    MS --> CS
+
+    WS --> BM
+    WF --> BM
+
+    EXEC --> CRIT
+    CRIT --> |reject| REACT
+    CRIT --> |accept| ANAL --> YIELD_EVENT
+    YIELD_EVENT --> WM --> REACT
+
+    REACT --> |timeout| FALLBACK[LLM fallback answer]
+
+    INT -.->|on quit| RF
+    RF --> CS
+    CS --> OM
+    CS --> FC
+    CS --> LC
+    RF --> HEUR_J
+
+    SYS -.-> HENG
+    HENG -.-> HEUR_J
+
+    GL --> PE
+    GL --> TC
+    PE -.-> SYS```
 
 ## Features
 
