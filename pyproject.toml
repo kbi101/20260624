@@ -1,0 +1,20 @@
+[project]
+name = "morphos"
+version = "0.1.0"
+description = "Autonomous AI agent system with ReAct loop, all running locally"
+requires-python = ">=3.10"
+dependencies = [
+    "ollama",
+    "httpx",
+    "beautifulsoup4",
+    "readability-lxml",
+    "rich",
+    "chromadb",
+]
+
+[project.scripts]
+morphos = "morphos.cli:main"
+
+[build-system]
+requirements = ["hatchling"]
+build-backend = "hatchling.build"
