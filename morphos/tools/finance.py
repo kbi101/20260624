@@ -75,8 +75,20 @@ def _extract_ticker(text: str) -> str:
     """Best-effort ticker extraction from a natural language query."""
     import re
 
-    # Common pattern: pull uppercase words that look like tickers (1-5 chars)
+    STOP = {
+        "THE", "FOR", "AND", "WITH", "FROM", "ABOUT", "TO", "OF", "IN",
+        "IS", "IT", "ON", "AS", "AT", "BY", "UP", "AN", "BE", "A",
+        "PRICE", "PRICES", "STOCK", "QUOTE", "QUOTES", "DATA", "NEWS",
+        "INFO", "TODAY", "CURRENT", "REALTIME", "MARKET", "TREND",
+        "REPORT", "BASIC", "LOOK", "UP", "GET", "GETS", "GIVE",
+        "WHAT", "HOW", "WHERE", "WHEN", "WHO", "WHY", "CAN", "WILL",
+        "HAVE", "HAS", "HAD", "DOES", "DID", "COULD", "SHOULD",
+        "ETF", "FUND", "INDEX", "TICKER", "SYMBOL", "STOCKS",
+        "ME", "MY", "YOUR", "MANY", "NAV", "VALUE", "USE",
+    }
+
     candidates = re.findall(r"\b[A-Z]{1,5}\b", text.upper())
-    if candidates:
-        return candidates[0]
+    for c in candidates:
+        if c not in STOP:
+            return c
     return ""

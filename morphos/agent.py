@@ -12,6 +12,7 @@ from morphos.memory.working_memory import WorkingMemory
 from morphos.config import Config
 from morphos.critic import Critic
 from morphos.analyzer import Analyzer
+from morphos.debug_logger import DebugLogger
 from morphos.dynamic_tools import DynamicToolRegistry
 from morphos.heuristics import HeuristicEngine
 
@@ -21,12 +22,14 @@ SYSTEM_PROMPT = r"""You are an AI assistant. You must output exactly one of thes
 To use a tool, output this EXACTLY:
 Thought: <reason>
 Action: <tool_name>
-Action Input: {{"arg": "value"}}
+Action Input {{"arg": "value"}}
+
+IMPORTANT: Only one tool call per turn. Wait for the Observation before calling another tool. Chain multiple steps by making one call at a time.
 
 To finish, output this EXACTLY:
 Final Answer: <answer>
 
-CRITICAL RULES — DO NOT DEViate FROM THE FORMAT ABOVE:
+CRITICAL RULES — DO NOT DEVIATE FROM THE FORMAT ABOVE:
 1. Always start a line with "Thought:" before acting
 2. Always write "Action: " followed by the exact tool name on its own line
 3. Always write "Action Input: " followed by valid JSON on its own line
@@ -37,20 +40,20 @@ Available tools:
 {tools_list}
 
 Parameter names per tool:
-- web_search → {{\"query\": \"...\"}}
-- web_fetch → {{\"url\": \"https://...\"}} 
-- python_exec → {{\"code\": \"print(...)\"}}
-- finance → {{\"symbol\": \"SPY\"}} or {{\"text_query\": \"...\"}}
-- file_read → {{\"filepath\": \"/path/to/file\"}} 
-- file_write → {{\"filepath\": \"/path\", \"content\": \"...\"}}
-- directory_search → {{\"pattern\": \"*.py\"}}
-- calculator → {{\"expression\": \"2+3*4\"}}
-- memory_search → {{\"query\": \"...\"}}
+- web_search → {{"query": "..."}}
+- web_fetch → {{"url": "https://..."}} 
+- python_exec → {{"code": "print(...)"}}
+- finance → {{"symbol": "SPY"}} or {{"text_query": "..."}}
+- file_read → {{"filepath": "/path/to/file"}} 
+- file_write → {{"filepath": "/path", "content": "..."}}
+- directory_search → {{"pattern": "*.py"}}
+- calculator → {{"expression": "2+3*4"}}
+- memory_search → {{"query": "..."}}
 
 Examples:
 
 User: What is 15 squared?
-Thought: I need to compute 15*15 so I will use the calculator tool.
+Thought: I need to compute the value.
 Action: calculator
 Action Input: {{"expression": "15*15"}}
 
@@ -59,13 +62,19 @@ Observation: = 225
 Final Answer: 15 squared is 225.
 
 User: What is the price of AAPL?
-Thought: The user wants a stock price so I should use the finance tool.
+Thought: I need stock data first.
 Action: finance
 Action Input: {{"symbol": "AAPL"}}
 
-Observation: Latest price for AAPL: $198.50
+Observation: AAPL latest close $198.50 + volume ...
 
-Final Answer: Apple (AAPL) is currently trading at approximately $198.50."""
+Thought: Now let me search for recent news.
+Action: web_search
+Action Input: {{"query": "Apple Inc AAPL news today"}}
+
+Observation: Search results for Apple news: ...
+
+Final Answer: Apple (AAPL) is currently trading at approximately $198.50. Recent news includes..."""
 
 
 SYSTEM_PROMPT_MEMORY = r"""
@@ -86,7 +95,11 @@ class ReActAgent:
 
     def __post_init__(self):
         self.config = self.config or Config(model=self.model, max_iterations=self.max_iterations)
-        self.llm = LLMClient(model=self.model)
+        self.debug = DebugLogger(enabled=self.config.debug)
+        self.llm = LLMClient(
+            model=self.model,
+            debug_logger=self.debug,
+        )
         self.registry = ToolRegistry()
         if self.memory is None:
             self.memory = WorkingMemory(max_tokens=6000)
@@ -95,7 +108,11 @@ class ReActAgent:
         self.analyzer = Analyzer()
         self.critic = None
         if self.config.critic_enabled:
-            self.critic = Critic(llm_client=self.llm, strictness=self.config.critic_strictness)
+            self.critic = Critic(
+                critic_model=self.config.critic_model,
+                strictness=self.config.critic_strictness,
+                debug_logger=self.debug,
+            )
 
         self.dynamic_registry = None
         if self.config.dynamic_tools_dir:
@@ -118,6 +135,11 @@ class ReActAgent:
             if hint:
                 prompt += "\n" + hint
 
+            # Financial query enrichment — always search for today's data & latest quote
+            fin_hint = _build_financial_hint(query_text)
+            if fin_hint:
+                prompt += "\n" + fin_hint
+
         if self.store and query_text:
             memories = self.store.query(query_text, n_results=self.rag_retrieval_count)
             if memories:
@@ -135,13 +157,20 @@ class ReActAgent:
         system_prompt = self._build_system_prompt(query)
         self.memory.append("system", system_prompt)
         self.memory.append("user", query)
+        self.debug.agent_step(0, "start", query)
 
         for iteration in range(1, self.max_iterations + 1):
+            self.debug.agent_step(iteration, "llm_call")
             context = self.memory.get_context()
             llm_raw = self.llm.chat(context)
             yield "llm_response", llm_raw
 
-            parsed = _parse_response(llm_raw, self.registry._tools.keys())
+            # Retry immediately on empty response — no point parsing nothing
+            if not llm_raw.strip():
+                self.memory.append("user", "Empty response. Please reply with a Thought, Action+Action Input, or Final Answer.")
+                continue
+
+            parsed = _parse_multi_response(llm_raw, self.registry._tools.keys())
             if parsed is None:
                 self.memory.append("assistant", llm_raw)
                 correction = (
@@ -157,78 +186,77 @@ class ReActAgent:
                 self.memory.append("user", correction)
                 continue
 
-            ptype, pdata = parsed  # ptype is "final" or "action"
+            ptype, pdata = parsed
 
             if ptype == "final":
                 self.memory.append("assistant", llm_raw)
                 yield "final_answer", pdata.strip()
+                self.debug.agent_step(iteration, "final_answer")
                 return
 
-            tool_name_str, kwargs = pdata["tool"], pdata["kwargs"]
+# ptype == "actions" — take only the first action per turn
+            tool_name_str, kwargs = pdata[0]
+
+            self.debug.tool_call(tool_name_str, kwargs)
+            yield "llm_response", f"Action: {tool_name_str}({kwargs})"
+
             tool = self.registry.get(tool_name_str)
             if tool is None:
                 observation = f"Unknown tool: {tool_name_str}"
                 yield "tool_error", observation
-                self.memory.append("assistant", llm_raw)
-                self.memory.append("user", f"Observation: {observation}")
-                continue
-
-            start_time = time.time()
-            exec_error = None
-            try:
-                result = tool.execute(**kwargs)
-            except TypeError as te:
-                clean_kwargs = _sanitize_kwargs(kwargs, tool_name_str)
-                if clean_kwargs != kwargs:
-                    try:
-                        result = tool.execute(**clean_kwargs)
-                    except Exception as te2:
-                        exec_error = f"Error: {te2}"
-                        result = exec_error
-                else:
-                    exec_error = f"Error: {te}"
-                    result = exec_error
-            except Exception as e:
-                exec_error = f"Error: {e}"
-                result = exec_error
-
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            critic_verdict = None
-
-            if self.critic and not exec_error:
-                accepted = self.critic.review(tool_name_str, result, query)
-                critic_verdict = "accept" if accepted else "reject"
-                yield "critic", (tool_name_str, critic_verdict)
-
-                if not accepted:
-                    self.analyzer.record(
-                        tool_name_str, elapsed_ms, "critic_rejected", iteration,
-                        message=str(result)[:200], critic_verdict="reject",
-                    )
-                    observation = (
-                        f"Critic rejected the output from {tool_name_str}. "
-                        "The result was deemed insufficient. Try again with different parameters or a different tool."
-                    )
-                    yield "critic_reject", observation
-                    self.memory.append("assistant", llm_raw)
-                    self.memory.append("user", f"Observation: {observation}")
-                    continue
-
-            if exec_error:
-                self.analyzer.record(
-                    tool_name_str, elapsed_ms, "error", iteration,
-                    message=exec_error, critic_verdict=critic_verdict,
-                )
-                yield "tool_error", result
+                self.debug.tool_error(tool_name_str, observation, 0)
             else:
-                self.analyzer.record(
-                    tool_name_str, elapsed_ms, "success", iteration,
-                    message=str(result)[:200], critic_verdict=critic_verdict,
-                )
-                yield "tool_result", (tool_name_str, result)
+                start_time = time.time()
+                exec_error = None
+                try:
+                    result = tool.execute(**kwargs)
+                except TypeError as te:
+                    clean_kwargs = _sanitize_kwargs(kwargs, tool_name_str)
+                    if clean_kwargs != kwargs:
+                        try:
+                            result = tool.execute(**clean_kwargs)
+                        except Exception as te2:
+                            exec_error = f"Error: {te2}"
+                            result = exec_error
+                    else:
+                        exec_error = f"Error: {te}"
+                        result = exec_error
+                except Exception as e:
+                    exec_error = f"Error: {e}"
+                    result = exec_error
+
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                critic_verdict = None
+
+                if self.critic and not exec_error:
+                    accepted = self.critic.review(tool_name_str, result, query)
+                    critic_verdict = "accept" if accepted else "reject"
+                    yield "critic", (tool_name_str, critic_verdict)
+
+                    if not accepted:
+                        self.analyzer.record(
+                            tool_name_str, elapsed_ms, "critic_rejected", iteration,
+                            message=str(result)[:200], critic_verdict="reject",
+                        )
+                        observation = f"Critic rejected the output from {tool_name_str}. The result was deemed insufficient. Try again with different parameters or a different tool."
+                        yield "critic_reject", observation
+                    else:
+                        self.analyzer.record(
+                            tool_name_str, elapsed_ms, "success", iteration,
+                            message=str(result)[:200], critic_verdict=critic_verdict,
+                        )
+                        observation = str(result)
+
+                if exec_error:
+                    self.analyzer.record(
+                        tool_name_str, elapsed_ms, "error", iteration,
+                        message=exec_error,
+                    )
+                    observation = str(result)
 
             self.memory.append("assistant", llm_raw)
-            self.memory.append("user", f"Observation: {result}")
+            self.memory.maybe_compress()
+            self.memory.append("user", f"Observation: {observation}")
 
         fallback_result = self.llm.chat(
             self.memory.get_context()
@@ -268,33 +296,123 @@ def _parse_kwargs(text: str, tool_name: str = "") -> dict:
     return {"url": text}
 
 
-def _parse_response(raw: str, available_tools: set):
-    """Extract intent from LLM output. Returns (type, data) or None."""
+def _parse_multi_response(raw: str, available_tools: set):
+    """Extract Final Answer OR all Action blocks from one LLM turn.
+
+    When the model outputs Actions AND hallucinated Observation lines,
+    we extract only the valid Action/Action Input pairs and execute them for real.
+    We skip any Final Answer that comes after a hallucinated chain.
+    """
     import json
 
-    final = re.search(r"Final Answer:?\s*(.+)", raw, re.DOTALL)
-    if final:
-        return ("final", final.group(1).strip())
+    # Line-by-line scanner — reliable across all action formats
+    matches = _scan_actions(raw)
 
-    action_re = re.search(r"Action:\s*([\w_]+)", raw)
-    input_re = re.search(r"Action Input:\s*\{(.+?)\}", raw, re.DOTALL)
+    if matches:
+        pass  # go down to parse actions below
+    elif re.search(r"Action:\s*[\w_]+", raw):
+        # Actions exist but JSON couldn't be parsed — best-effort recovery
+        matches = _recover_actions(raw, available_tools)
+    else:
+        # No actions → look for a clean Final Answer
+        final = re.search(r"Final Answer:?\s*(.+)", raw, re.DOTALL)
+        if final:
+            return ("final", final.group(1).strip())
+        return None
 
-    if action_re:
-        tname = action_re.group(1).strip()
+    actions = []
+    for tname, json_blob in matches:
+        tname = tname.strip()
+        try:
+            kwargs = json.loads(json_blob)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+        except (json.JSONDecodeError, TypeError):
+            fallback = json_blob.strip("{} ") if isinstance(json_blob, str) else ""
+            kwargs = _parse_kwargs(fallback, tname) or {}
+        actions.append((tname, kwargs))
 
-        if input_re:
-            try:
-                kwargs_str = f"{{{input_re.group(1)}}}"
-                kwargs = json.loads(kwargs_str)
-            except json.JSONDecodeError:
-                kwargs = None
-        else:
-            kwargs = _infer_kwargs(raw, tname)
+    return ("actions", actions)
 
-        return ("action", {"tool": tname, "kwargs": {} if kwargs is None else kwargs})
 
-    # No recognized format at all
-    return None
+def _scan_actions(raw: str) -> list[tuple[str, str]]:
+    """Scan raw text line-by-line for `Action:` + `Action Input:` pairs.
+
+    Returns list of (tool_name, json_string) tuples.
+    """
+    results = []
+    lines = raw.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        m = re.match(r"Action:\s*([\w_]+)", line)
+        if m:
+            # Look for Action Input on the next non-empty line
+            j = i + 1
+            while j < len(lines) and not re.match(r"Action\s+Input:", lines[j]):
+                j += 1
+            if j < len(lines):
+                input_line = lines[j].strip()
+                # Strip "Action Input:" prefix
+                json_text = re.sub(r"^Action\s+Input:\s*", "", input_line, flags=re.I)
+                # If JSON spans multiple lines, keep merging until balanced braces
+                brace_depth = 0
+                completed = False
+                for ch in json_text:
+                    if ch == "{":
+                        brace_depth += 1
+                    elif ch == "}":
+                        brace_depth -= 1
+                    if brace_depth <= 0 and "{" in json_text:
+                        completed = True
+                        break
+
+                while not completed and j + 1 < len(lines):
+                    j += 1
+                    extra = lines[j].strip()
+                    # Stop if next line is a new section header (Observation, Action, etc.)
+                    if re.match(r"(Action|Observation|Final Answer|Thought):\s*", extra):
+                        break
+                    json_text += " " + extra
+                    for ch in lines[j].strip():
+                        if ch == "{":
+                            brace_depth += 1
+                        elif ch == "}":
+                            brace_depth -= 1
+                        if brace_depth <= 0:
+                            completed = True
+                            break
+
+                results.append((m.group(1), json_text))
+        i += 1
+    return results
+
+
+def _recover_actions(raw: str, available_tools: set):
+    """Best-effort recovery when Action Input JSON is missing or malformed."""
+    action_lines = re.finditer(r"Action:\s*([\w_]+)\s*\n(.+?)(?=\n\s*Action:|\Z)", raw, re.DOTALL)
+    results = []
+    for m in action_lines:
+        tname = m.group(1).strip()
+        rest = m.group(2).strip()
+        kw = _infer_kwargs(m.group(0), tname) or {"url": rest[:200]}
+        results.append((tname, kw))
+    return results
+
+
+def _parse_response(raw: str, available_tools: set):
+    """Legacy wrapper — backward compat for single-action path."""
+    parsed = _parse_multi_response(raw, available_tools)
+    if parsed is None:
+        return None
+    if parsed[0] == "final":
+        return ("final", parsed[1])
+    # "actions" → flatten to single action for legacy callers
+    actions = parsed[1]
+    if len(actions) == 1:
+        tname, kwargs = actions[0]
+        return ("action", {"tool": tname, "kwargs": kwargs})
+    return parsed
 
 
 def _infer_kwargs(raw: str, tool_name: str) -> dict | None:
@@ -352,9 +470,52 @@ def _sanitize_kwargs(kwargs: dict, tool_name: str) -> dict:
         "finance": ["symbol", "text_query"],
     }
 
-    expected = aliases.get(tool_name, list(data.keys())) 
+    expected = aliases.get(tool_name, list(data.keys()))
     cleaned = {}
     for k, v in data.items():
         if k in expected:
             cleaned[k] = v
     return cleaned or data
+
+
+def _build_financial_hint(query: str) -> str | None:
+    """Detect financial queries and return a prompt hint to ask for today's data + latest quote."""
+    q = query.lower()
+    ticker_match = re.search(r"\b([A-Z]{3,5})\b", query)
+
+    fin_keywords = [
+        "price", "stock", "ticker", "quote", "share", "trading", "market",
+        "earnings", "revenue", "performance", "etf", "funds", "ipo",
+        "bullish", "bearish", "dividend", "yield", "pe ratio", "volume",
+    ]
+
+    has_fin_keyword = any(kw in q for kw in fin_keywords)
+
+    # A 3-5 letter all-caps word is only treated as a ticker if it's short enough
+    # to plausibly be one AND the query has financial context. Plain text with no
+    # financial keywords and no obvious ticker gets ignored.
+    known_non_tickers = {
+        "WHAT", "THE", "WITH", "HAVE", "FROM", "THAT", "THIS", "THEY",
+        "WHEN", "WHERE", "WHICH", "THERE", "AFTER", "BEFORE", "ABOUT",
+        "YOUR", "MOST", "LONG", "NEAR", "LIKE", "SUCH", "MAKE", "VERY",
+    }
+    ticker = None
+    if ticker_match:
+        candidate = ticker_match.group(1).upper()
+        if candidate not in known_non_tickers:
+            ticker = candidate
+
+    if has_fin_keyword or ticker:
+        ticker_note = ""
+        if ticker:
+            ticker_note = f" The entity's ticker symbol is likely '{ticker}'."
+
+        return (
+            "FINANCIAL QUERY RULES:\n"
+            f"{ticker_note}\n"
+            "- When searching the web, always include 'today' or this date's year/month to ensure current data.\n"
+            "- If a ticker symbol is present, first call the finance tool with that symbol to get the latest quote.\n"
+            "- Report prices with today's context — do not give stale historical data without noting it."
+        )
+
+    return None

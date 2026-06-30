@@ -1,6 +1,6 @@
 """Configuration for Morphos."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -11,9 +11,14 @@ class Config:
     web_timeout: int = 15
     critic_enabled: bool = True
     critic_strictness: str = "moderate"
+    critic_model: str = "qwen2.5:3b"
     dynamic_tools_dir: str = None
 
     # Phase 4 — Autonomous Growth
     auto_evolve: bool = False
     auto_growth: bool = False
     multi_agent: bool = False
+    debug: bool = False
+
+    # Post-processing strips leaked control symbols. Avoid sending stop tokens
+    # to Ollama — even harmless-looking ones can break Gemma's output.

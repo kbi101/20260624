@@ -260,10 +260,12 @@ def main():
     parser.add_argument("--max-iters", type=int, default=10, help="Max ReAct iterations")
     parser.add_argument("--no-critic", action="store_true", help="Disable critic validation")
     parser.add_argument("--critic-strictness", default="moderate", choices=["loose", "moderate", "strict"])
+    parser.add_argument("--critic-model", default="qwen2.5:3b", help="Smaller model for critic validation (default: qwen2.5:3b)")
     parser.add_argument("--dynamic-tools-dir", default=None, help="Directory for dynamic tools (e.g. data/dynamic_tools)")
     parser.add_argument("--grow", action="store_true", help="Run one growth cycle (prompt evolution + tool curation)")
     parser.add_argument("--auto-evolve", action="store_true", help="Auto-apply prompt patches from growth cycle")
     parser.add_argument("--multi-agent", action="store_true", help="Enable multi-agent routing (finance/research/coding)")
+    parser.add_argument("--debug", action="store_true", help="Log every LLM call, tool invocation, and web request to debug.log")
     args = parser.parse_args()
 
     config = Config(
@@ -274,6 +276,7 @@ def main():
         dynamic_tools_dir=args.dynamic_tools_dir,
         auto_evolve=args.auto_evolve,
         multi_agent=args.multi_agent,
+        debug=args.debug,
     )
 
     if args.grow:
