@@ -92,6 +92,7 @@ class LLMClient:
         self.model = model
         self.debug = debug_logger or DebugLogger(enabled=False)
         self.fallback_ollama = OllamaBackend(model)
+        self._has_fallen_back = False
 
         if config is not None and getattr(config, "backend", "ollama") == "openrouter":
             override_model = getattr(config, "openrouter_model", None) or model
@@ -109,14 +110,15 @@ class LLMClient:
         self.debug.llm_request(self.model, messages)
         t0 = time.monotonic()
 
-        try:
-            content = self.backend.chat(messages)
-        except Exception as e:
-            if hasattr(self, "fallback_ollama"):
-                print(f"\n[dim]OpenRouter failed ({e}), falling back to local Ollama[/]\n")
+        if self._has_fallen_back:
+            content = self.fallback_ollama.chat(messages)
+        else:
+            try:
+                content = self.backend.chat(messages)
+            except Exception as e:
+                print(f"\n[dim]OpenRouter failed, falling back to local Ollama for this session[/]\n")
+                self._has_fallen_back = True
                 content = self.fallback_ollama.chat(messages)
-            else:
-                raise
 
         duration_ms = int((time.monotonic() - t0) * 1000)
         self.debug.llm_response(content, duration_ms)
