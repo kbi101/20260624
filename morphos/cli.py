@@ -1,6 +1,7 @@
 """CLI interface for Morphos agent."""
 
 import re
+import time
 import uuid
 import readline
 import argparse
@@ -121,7 +122,10 @@ def _handle_event(event_type, payload):
 
 
 def run_agent(query: str, config: Config):
+    from datetime import datetime
+    console.print(f"[dim]⏱ {datetime.now().strftime('%H:%M:%S')} — Starting query…[/]")
     console.print(Panel(Text(query, style="bold"), title="[blue]User Query"))
+    t_start = time.monotonic()
 
     if config.multi_agent:
         from morphos.multi_agent import RouterAgent
@@ -144,7 +148,15 @@ def run_agent(query: str, config: Config):
         agent, store = make_agents(config)
         for event_type, payload in agent.run(query):
             _handle_event(event_type, payload)
-        return agent
+
+    elapsed_s = time.monotonic() - t_start
+    ts_end = datetime.now().strftime("%H:%M:%S")
+    if elapsed_s < 60:
+        label = int(elapsed_s * 1000), "ms"
+    else:
+        label = f"{elapsed_s:.1f}", "s"
+    console.print(f"[dim]✓ {ts_end} — Query completed in {label[0]} {label[1]}[/]")
+    return agent
 
 
 def run_interactive(config: Config):
