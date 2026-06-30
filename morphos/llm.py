@@ -61,8 +61,7 @@ class OpenRouterBackend(LLMBackend):
                 )
 
                 if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", self.RETRY_BASE_DELAY * attempt))
-                    raise RetryableError(f"Rate limited (429), retrying in {retry_after}s")
+                    raise RetryableError("Rate limited (429)")
                 elif resp.status_code >= 500:
                     raise RetryableError(f"Server error ({resp.status_code})")
 
@@ -83,6 +82,8 @@ class RetryableError(Exception):
 
 
 class LLMClient:
+    _has_fallen_back: bool = False
+
     def __init__(
         self,
         model: str = "gemma4:12b",
@@ -92,7 +93,6 @@ class LLMClient:
         self.model = model
         self.debug = debug_logger or DebugLogger(enabled=False)
         self.fallback_ollama = OllamaBackend(model)
-        self._has_fallen_back = False
 
         if config is not None and getattr(config, "backend", "ollama") == "openrouter":
             override_model = getattr(config, "openrouter_model", None) or model
@@ -110,14 +110,14 @@ class LLMClient:
         self.debug.llm_request(self.model, messages)
         t0 = time.monotonic()
 
-        if self._has_fallen_back:
+        if LLMClient._has_fallen_back:
             content = self.fallback_ollama.chat(messages)
         else:
             try:
                 content = self.backend.chat(messages)
             except Exception as e:
                 print(f"\n[dim]OpenRouter failed, falling back to local Ollama for this session[/]\n")
-                self._has_fallen_back = True
+                LLMClient._has_fallen_back = True
                 content = self.fallback_ollama.chat(messages)
 
         duration_ms = int((time.monotonic() - t0) * 1000)

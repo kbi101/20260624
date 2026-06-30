@@ -167,3 +167,18 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 
 **Q:** User wanted to revert back to exactly one tool call per LLM request/turn.
 **A:** Rewrote the execution block in `agent.py` to always take only `pdata[0]`, execute one tool, append one observation, and loop back. Updated system prompt to say "Only one tool call per turn" with an example showing chaining across turns (finance → observation → web_search → observation → final answer).
+
+## 2026-06-30T14:05:00+00:00 — OpenRouter backend support & hallucination fix
+
+**Q:** User wants to support OpenRouter alongside local Ollama.
+**A:** Refactored `llm.py` into LLMClient + OllamaBackend + OpenRouterBackend. Added config fields (`backend`, `openrouter_model`, `openrouter_api_key`). Added CLI flags `--backend`, `--openrouter-model`, `--openrouter-key`. Updated all call sites (agent, critic, reflector, cli). Tested with `nvidia/nemotron-3-nano-30b-a3b:free` — works.
+
+## 2026-06-30T14:15:00+00:00 — Hallucinated observations from LLM
+
+**Q:** Debug log shows model hallucinating tool results (fake prices, news).
+**A:** Gemma4 writes synthetic "Observation:" blocks inline with actions. Fixed by: (1) strengthening system prompt to forbid writing observations, (2) adding `_strip_hallucinated_observations()` that cuts text after first valid `Action Input: {...}` block before parsing.
+
+## 2026-06-30T14:08:00+00:00 — OpenRouter rate limit (429) handling
+
+**Q:** User hit 429 Too Many Requests from OpenRouter.
+**A:** Added retry logic in `OpenRouterBackend.chat()` — retries on 429/5xx with exponential backoff (3s, 6s, 9s), respects `Retry-After` header. After all retries exhaust, falls back to local Ollama so the query doesn't hard-fail.

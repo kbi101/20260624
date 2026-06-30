@@ -76,7 +76,7 @@ Action Input: {{"query": "Apple Inc AAPL news today"}}
 
 Observation: Search results for Apple news: ...
 
-Final Answer: Apple (AAPL) is currently trading at approximately $198.50. Recent news includes..."""
+Citations and sources: When you rely on data from web_search or web_fetch tools, cite the source with a bracketed number like [1] next to the claim. The source list will be included at the end of your final answer by the system."""
 
 
 SYSTEM_PROMPT_MEMORY = r"""
@@ -109,6 +109,7 @@ class ReActAgent:
 
         self.heuristics = HeuristicEngine()
         self.analyzer = Analyzer()
+        self._source_urls: list[str] = []
         self.critic = None
         if self.config.critic_enabled:
             self.critic = Critic(
@@ -156,8 +157,15 @@ class ReActAgent:
 
         return prompt
 
+    def _extract_urls(self, observation: str) -> list[str]:
+        import re as _re
+        urls = _re.findall(r'https?://[^\s<>"\]]+', observation)
+        return urls
+
     def run(self, query: str):
+        LLMClient._has_fallen_back = False
         self.memory.clear()
+        self._source_urls = []
         system_prompt = self._build_system_prompt(query)
         self.memory.append("system", system_prompt)
         self.memory.append("user", query)
@@ -195,12 +203,16 @@ class ReActAgent:
             ptype, pdata = parsed
 
             if ptype == "final":
+                source_block = ""
+                if self._source_urls:
+                    numbered = "\n".join(f"[{i}] {u}" for i, u in enumerate(self._source_urls[:10], 1))
+                    source_block = "\n\n---\n**Sources:**\n" + numbered
+                final_payload = pdata.strip()
                 self.memory.append("assistant", llm_raw)
-                yield "final_answer", pdata.strip()
+                yield "final_answer", final_payload + source_block
                 self.debug.agent_step(iteration, "final_answer")
                 return
 
-# ptype == "actions" — take only the first action per turn
             tool_name_str, kwargs = pdata[0]
 
             self.debug.tool_call(tool_name_str, kwargs)
@@ -262,7 +274,21 @@ class ReActAgent:
 
             self.memory.append("assistant", llm_raw)
             self.memory.maybe_compress()
+            new_urls = self._extract_urls(observation)
+            for u in new_urls:
+                if u not in self._source_urls:
+                    self._source_urls.append(u)
             self.memory.append("user", f"Observation: {observation}")
+
+        # Timeout fallback — ask LLM for best answer with source citations
+        if self._source_urls:
+            numbered = "\n".join(f"[{i}] {u}" for i, u in enumerate(self._source_urls[:10], 1))
+            source_prompt = (
+                "\n\nSources you fetched this session:\n" + numbered +
+                "\nInclude bracketed citations like [1] next to key claims."
+            )
+        else:
+            source_prompt = ""
 
         fallback_result = self.llm.chat(
             self.memory.get_context()
@@ -270,8 +296,14 @@ class ReActAgent:
                 f"Time is up. You've collected what information you can. Based on everything above, "
                 f"give your best possible answer to the original question: {query}. "
                 "If you lack real-time data, state that clearly and provide the closest information available."
+                + source_prompt
             )}]
         )
+
+        if self._source_urls:
+            numbered = "\n".join(f"[{i}] {u}" for i, u in enumerate(self._source_urls[:10], 1))
+            fallback_result += "\n\n---\n**Sources:**\n" + numbered
+
         self.memory.append("assistant", fallback_result.strip())
         yield "final_answer", fallback_result.strip()
 
