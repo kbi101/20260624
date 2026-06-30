@@ -2,6 +2,7 @@
 
 import re
 import time
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -168,7 +169,9 @@ class ReActAgent:
         self._source_urls = []
         system_prompt = self._build_system_prompt(query)
         self.memory.append("system", system_prompt)
-        self.memory.append("user", query)
+        today = datetime.now().strftime("%B %d, %Y")
+        enriched_query = f"[Today is {today}]\n\n{query}"
+        self.memory.append("user", enriched_query)
         self.debug.agent_step(0, "start", query)
 
         for iteration in range(1, self.max_iterations + 1):
