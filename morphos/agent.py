@@ -33,8 +33,10 @@ CRITICAL RULES — DO NOT DEVIATE FROM THE FORMAT ABOVE:
 1. Always start a line with "Thought:" before acting
 2. Always write "Action: " followed by the exact tool name on its own line
 3. Always write "Action Input: " followed by valid JSON on its own line
-4. Always end with "Final Answer: " when done — do not wrap it in Thought/Action blocks
-5. Use only tools listed below
+4. STOP GENERATING IMMEDIATELY after you write the closing brace "}}" of Action Input.  Do NOT write any Observation lines — the system will supply the real observation.
+5. NEVER invent, guess, or hallucinate Observation content. Only work with data provided to you by the system.
+6. Always end with "Final Answer: " when done — do not wrap it in Thought/Action blocks
+7. Use only tools listed below
 
 Available tools:
 {tools_list}
@@ -172,7 +174,9 @@ class ReActAgent:
                 self.memory.append("user", "Empty response. Please reply with a Thought, Action+Action Input, or Final Answer.")
                 continue
 
-            parsed = _parse_multi_response(llm_raw, self.registry._tools.keys())
+            trimmed = _strip_hallucinated_observations(llm_raw)
+
+            parsed = _parse_multi_response(trimmed, self.registry._tools.keys())
             if parsed is None:
                 self.memory.append("assistant", llm_raw)
                 correction = (
@@ -296,6 +300,43 @@ def _parse_kwargs(text: str, tool_name: str = "") -> dict:
     if tool_name == "directory_search":
         return {"pattern": text}
     return {"url": text}
+
+
+def _strip_hallucinated_observations(raw: str) -> str:
+    """Remove fake Observation lines the model writes on its own.
+
+    The agent loop supplies real observations. Any 'Observation:' line in the
+    LLM output is fabricated data that will cause hallucinations in the final
+    answer, so we strip everything from the first Action+Observation pair onward.
+    """
+    # Once we find a valid Action: ... Action Input: {...} block, cut
+    # everything after it to remove hallucinated observations.
+    lines = raw.split("\n")
+    cutoff = len(lines)
+    searching_for_action = False
+    in_action_input = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if re.match(r"Action:\s*[\w_]+", stripped):
+            searching_for_action = True
+        elif searching_for_action and re.match(r"Action\s+Input:", stripped, re.I):
+            in_action_input = True
+        elif in_action_input:
+            if "}" in stripped:
+                cutoff = i + 1
+                break
+    else:
+        # No action found — check for standalone Observation lines after any text
+        first_obs = None
+        for i, line in enumerate(lines):
+            if re.match(r"Observation:", line.strip()):
+                first_obs = i
+                break
+        if first_obs is not None:
+            cutoff = first_obs
+
+    return "\n".join(lines[:cutoff]).strip() + "\n"
 
 
 def _parse_multi_response(raw: str, available_tools: set):
