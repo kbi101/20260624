@@ -37,6 +37,8 @@ class OpenRouterBackend(LLMBackend):
     """Lightweight OpenRouter backend using requests (no SDK dependency)."""
 
     ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+    MAX_RETRIES = 3
+    RETRY_BASE_DELAY = 3
 
     def __init__(self, model: str, api_key: str):
         self.model = model
@@ -45,18 +47,39 @@ class OpenRouterBackend(LLMBackend):
     def chat(self, messages: list[dict]) -> str:
         import requests
 
-        resp = requests.post(
-            self.ENDPOINT,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"model": self.model, "messages": messages},
-            timeout=120,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        last_error = None
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                resp = requests.post(
+                    self.ENDPOINT,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": self.model, "messages": messages},
+                    timeout=120,
+                )
+
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", self.RETRY_BASE_DELAY * attempt))
+                    raise RetryableError(f"Rate limited (429), retrying in {retry_after}s")
+                elif resp.status_code >= 500:
+                    raise RetryableError(f"Server error ({resp.status_code})")
+
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
+
+            except (RetryableError, requests.exceptions.ConnectionError) as e:
+                last_error = e
+                delay = self.RETRY_BASE_DELAY * attempt
+                print(f"\n[dim]OpenRouter {e}, retrying in {delay}s (attempt {attempt}/{self.MAX_RETRIES})[/]\n")
+                time.sleep(delay)
+
+        raise last_error
+
+
+class RetryableError(Exception):
+    pass
 
 
 class LLMClient:
@@ -68,6 +91,7 @@ class LLMClient:
     ):
         self.model = model
         self.debug = debug_logger or DebugLogger(enabled=False)
+        self.fallback_ollama = OllamaBackend(model)
 
         if config is not None and getattr(config, "backend", "ollama") == "openrouter":
             override_model = getattr(config, "openrouter_model", None) or model
@@ -85,7 +109,14 @@ class LLMClient:
         self.debug.llm_request(self.model, messages)
         t0 = time.monotonic()
 
-        content = self.backend.chat(messages)
+        try:
+            content = self.backend.chat(messages)
+        except Exception as e:
+            if hasattr(self, "fallback_ollama"):
+                print(f"\n[dim]OpenRouter failed ({e}), falling back to local Ollama[/]\n")
+                content = self.fallback_ollama.chat(messages)
+            else:
+                raise
 
         duration_ms = int((time.monotonic() - t0) * 1000)
         self.debug.llm_response(content, duration_ms)
