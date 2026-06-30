@@ -51,6 +51,7 @@ class Critic:
         critic_model: str = "qwen2.5:3b",
         strictness: str = "moderate",
         debug_logger: DebugLogger | None = None,
+        config=None,
     ):
         self.strictness = strictness
         self.debug = debug_logger or DebugLogger(enabled=False)
@@ -58,7 +59,7 @@ class Critic:
         if llm_client and not hasattr(llm_client, "model"):
             raise TypeError("llm_client must be an LLMClient instance")
 
-        self.critic_llm = LLMClient(model=critic_model, debug_logger=self.debug)
+        self.critic_llm = LLMClient(model=critic_model, debug_logger=self.debug, config=config)
         if llm_client and not critic_model:
             self.critic_llm = llm_client
 

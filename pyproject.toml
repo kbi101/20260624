@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "ollama",
     "httpx",
+    "requests",
     "beautifulsoup4",
     "readability-lxml",
     "rich",

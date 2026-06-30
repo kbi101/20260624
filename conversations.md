@@ -152,3 +152,18 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 
 **Q:** User asked to update README.md with full feature docs, architecture diagram, screenshot placeholders, tech stack, and dev tool credits before pushing to GitHub.
 **A:** Wrote comprehensive README with: ASCII workflow diagram + mermaid flowchart (GitHub-renderable), all 8 feature sections, tool reference table, project structure tree, phase roadmap with spec links, tech stack table (Ollama/gemma4:12b, nomic-embed-text, Playwright/Chrome, ChromaDB, Rich, yfinance), and "Built With" section crediting opencode + qwen3.6:27b as the dev toolchain.
+
+## 2026-06-29T23:45:00+00:00 — Critic always rejecting tool outputs
+
+**Q:** User pointed out debug.log showed a request returned nothing — all tool calls were being rejected by the critic.
+**A:** Found root cause in `critic.py:124` — the `review()` method passed `original_query` as the third argument to `evaluate()` instead of `tool_output`, so the critic was always comparing the user's query against itself rather than actual tool results. Fixed by passing `tool_output`. Also fixed two sanitizer bugs: (1) regex on line 32 stopped at `summar` leaving a dangling "y" in the query, now uses `\w*` to match full word; (2) conjunction-splitting loop destroyed meaningful parts of the query, removed entirely.
+
+## 2026-06-30T00:15:00+00:00 — Empty LLM response causes parse error spiral
+
+**Q:** User reported "PARSE ERROR" messages flooding the agent.
+**A:** Debug log showed the LLM returned an empty string (`response_length: 0`). Parser hit `None` and triggered PARSE ERROR feedback which confused the model further. Added early empty-response check in `agent.py:168` that appends a retry hint and continues immediately without calling the parser.
+
+## 2026-06-30T00:20:00+00:00 — Revert multi-tool calls to single action per turn
+
+**Q:** User wanted to revert back to exactly one tool call per LLM request/turn.
+**A:** Rewrote the execution block in `agent.py` to always take only `pdata[0]`, execute one tool, append one observation, and loop back. Updated system prompt to say "Only one tool call per turn" with an example showing chaining across turns (finance → observation → web_search → observation → final answer).

@@ -99,6 +99,7 @@ class ReActAgent:
         self.llm = LLMClient(
             model=self.model,
             debug_logger=self.debug,
+            config=self.config,
         )
         self.registry = ToolRegistry()
         if self.memory is None:
@@ -112,6 +113,7 @@ class ReActAgent:
                 critic_model=self.config.critic_model,
                 strictness=self.config.critic_strictness,
                 debug_logger=self.debug,
+                config=self.config,
             )
 
         self.dynamic_registry = None

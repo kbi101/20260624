@@ -56,6 +56,7 @@ ALL_TOOLS = {
 def make_agent(config=None, system_addon=None, allowed_tools=None):
     """Create a single agent, optionally with narrowed tool set and prompt addon."""
     from morphos.memory.chroma_store import ChromaStore
+    from morphos.agent import ReActAgent
     if config is None:
         from morphos.config import Config
         config = Config()
@@ -126,7 +127,7 @@ def run_agent(query: str, config: Config):
         from morphos.multi_agent import RouterAgent
         from morphos.llm import LLMClient
         router = RouterAgent(
-            llm_client=LLMClient(model=config.model),
+            llm_client=LLMClient(model=config.model, config=config),
             agent_factory=make_agent,
         )
         last_domain = None
@@ -166,7 +167,7 @@ def run_interactive(config: Config):
             readline.add_history(query)
 
         if not query or query.lower() in ("quit", "exit", "q"):
-            _run_reflection(all_messages, store)
+            _run_reflection(all_messages, store, config)
             if _last_agent[0]:
                 _print_session_log(_last_agent[0])
                 _handle_dynamic_tool_persistence(_last_agent[0], config)
@@ -181,14 +182,14 @@ def run_interactive(config: Config):
             console.print(f"[bold red]Error:[/] {e}")
 
 
-def _run_reflection(messages: list[dict], store: ChromaStore):
+def _run_reflection(messages: list[dict], store: ChromaStore, config=None):
     if not messages:
         return
 
     console.print("[dim]Running session reflection...[/dim]")
     try:
         from morphos.llm import LLMClient
-        reflector = Reflector(chroma_store=store, llm_client=LLMClient(model="gemma4:12b"))
+        reflector = Reflector(chroma_store=store, llm_client=LLMClient(model="gemma4:12b", config=config))
         stats = reflector.reflect(messages, session_id=_session_id)
         parts = [f"{stats['facts_stored']} facts", f"{stats['lessons_stored']} lessons"]
         hl = stats.get('heuristics_learned', 0)
@@ -237,7 +238,7 @@ def _run_growth_cycle(config):
     from morphos.dynamic_tools import DynamicToolRegistry
 
     console.print("[yellow]Running growth cycle...[/yellow]")
-    llm = LLMClient(model=config.model)
+    llm = LLMClient(model=config.model, config=config)
     registry = DynamicToolRegistry() if config.dynamic_tools_dir else None
     if registry and config.dynamic_tools_dir:
         from morphos.dynamic_tools import load_persistent_dynamic_tools
@@ -266,6 +267,9 @@ def main():
     parser.add_argument("--auto-evolve", action="store_true", help="Auto-apply prompt patches from growth cycle")
     parser.add_argument("--multi-agent", action="store_true", help="Enable multi-agent routing (finance/research/coding)")
     parser.add_argument("--debug", action="store_true", help="Log every LLM call, tool invocation, and web request to debug.log")
+    parser.add_argument("--backend", default="ollama", choices=["ollama", "openrouter"], help="LLM backend (default: ollama)")
+    parser.add_argument("--openrouter-model", default=None, help="OpenRouter model slug (e.g. google/gemini-2.0-flash)")
+    parser.add_argument("--openrouter-key", default=None, help="OpenRouter API key (or set OPENROUTER_API_KEY env var)")
     args = parser.parse_args()
 
     config = Config(
@@ -277,6 +281,9 @@ def main():
         auto_evolve=args.auto_evolve,
         multi_agent=args.multi_agent,
         debug=args.debug,
+        backend=args.backend,
+        openrouter_model=args.openrouter_model,
+        openrouter_api_key=args.openrouter_key,
     )
 
     if args.grow:
