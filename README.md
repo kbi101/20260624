@@ -163,7 +163,7 @@ flowchart TB
         OM["nomic-embed-text via Ollama"]
     end
 
-    subgaph GROWTH["Growth Cycle — --grow"]
+    subgraph GROWTH["Growth Cycle — --grow"]
         PE["prompt_evolver.py"]
         TC["tool_curator.py"]
         GL["growth_loop.py → JSON report"]

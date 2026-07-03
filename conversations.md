@@ -235,6 +235,16 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 - Landing page shows "Recent Topics" panel with clickable history items styled in glassmorphism dark theme
 - Form submit changed to `POST /api/dashboard` so new generations bypass GET cache
 
+## 2026-07-03T08:30:00-07:00 — Graph node label truncation & README update
+
+**Q:** Knowledge graph node labels were severely truncated inside ~28px circles, asking for a better solution. Also asked to update README with latest enhancements and screenshots.
+**A:** Rewrote `renderGraph` in `dash.js`: nodes now show full multi-line labels as rounded pill badges below each circle instead of squished inline text. Added hover system: nodes highlight with purple stroke + white text, tooltip shows edge connections. Fixed duplicate `function draw()` blocks from prior incremental edits. Updated README.md with 4 screenshot embeds (landing, dashboard header, knowledge graph close-up, full scroll), new UCT/web UI section, updated project tree listing `uct/` and `webui/`, added FastAPI/Uvicorn to stack table. Committed and pushed.
+
+## 2026-07-03T12:00:00-07:00 — Commit and push
+
+**Q:** Asked to commit and push all changes.
+**A:** Staged all files, updated .gitignore to exclude debug.log and cached dashboard JSONs. Committed 29 files (+3468 lines) and pushed to main on GitHub. Updated conversations.md with this exchange.
+
 ## 2026-07-01T15:00:00+00:00 — UCT Phase 6 implementation complete
 
 **Q:** User asked to start building Phase 6.
