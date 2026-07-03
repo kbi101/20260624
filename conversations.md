@@ -182,3 +182,60 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 
 **Q:** User hit 429 Too Many Requests from OpenRouter.
 **A:** Added retry logic in `OpenRouterBackend.chat()` — retries on 429/5xx with exponential backoff (3s, 6s, 9s), respects `Retry-After` header. After all retries exhaust, falls back to local Ollama so the query doesn't hard-fail.
+
+## 2026-06-30T14:20:00+00:00 — Source URLs in final answers
+
+**Q:** User wants source citations for summarized content.
+**A:** Added `_extract_urls()` to agent that scans every tool observation for `http(s)://` links, deduplicates them, and appends a numbered `Sources:` block to every final answer (both normal and timeout fallback). System prompt updated to encourage `[n]` citations in text.
+
+## 2026-06-30T14:22:00+00:00 — Inject today's date into query
+
+**Q:** LLM needs to know the current date to find latest info.
+**A:** `agent.run()` now prefixes queries with `[Today is June 30, 2026]` so the model has temporal context for search/fetch actions.
+
+## 2026-06-30T14:25:00+00:00 — Timing display for queries
+
+**Q:** User wants timestamps at start/end of query with elapsed time.
+**A:** `cli.run_agent()` now prints `⏱ HH:MM:SS — Starting query…` and `✓ HH:MM:SS — Query completed in X ms/s`. Uses monotonic clock, displays milliseconds under 60s or seconds over 60s.
+
+## 2026-07-01T09:00:00+00:00 — UCT Agent blueprint & spec creation
+
+**Q:** User shared a detailed blueprint for a Universal Cognitive Textbook agent and asked for a concrete plan. Requirements: terminal output only, first demo topic is "observability in cloud and AI applications", integrate as a routed sub-agent within morphos, all code in its own `uct/` package.
+**A:** Read existing morphos architecture (agent.py, cli.py, multi_agent.py, config.py). Wrote `spec/006-Universal-Cognitive-Textbook.md` with full design: 10-file `uct/` package (models, dimensions, prompts, generator, renderer, compressor, graph, toolkit), 3-phase LLM generation pipeline (dimension analysis → object generation → compression), Rich terminal dashboard renderer with cognitive regions (TOP/LEFT/CENTER/RIGHT/BOTTOM), TEXTBOOK router domain registration, depth/mode CLI flags, strict structured Knowledge Object schemas (Concept, SequenceBlock, CausalLoopBlock, PerspectiveMatrix), and knowledge graph with typed edges. Implementation order: models→dimensions→prompts→generator→renderer→compressor→graph→toolkit→router wiring→CLI flags.
+
+## 2026-07-02T00:15:00+00:00 — List online resources for textbook
+
+**Q:** User wants the textbook to list all online resource URLs it used as references.
+**A:** Added a web research phase before UCT generation in `_run_textbook` (cli.py): search topic → fetch top 3 result pages → extract titles + content → pass as `research_context` to generator → display References panel with numbered source titles and URLs below the rendered dashboard. Verified imports resolve cleanly.
+
+## 2026-07-02T10:00:00+00:00 — Server fixes: graph API, research fallback, bounds check
+
+**Q:** Web server launched but crashed on topic generation with `KnowledgeGraph.neighbors` error and `IndexError`.
+**A:** Two fixes in `webui/server.py`: (1) Replaced Playwright-based search/fetch with plain HTTP (`requests` + BeautifulSoup) — safe inside asyncio subprocess. (2) Fixed `IndexError` in `_gather_research` snippet-fallback loop by adding bounds check before accessing `parts[idx]`. Simplified CLI `_launch_web_server` — no browser warmup needed since research is now HTTP-only.
+
+## 2026-07-02T09:40:00+00:00 — Subprocess uvicorn to avoid event loop conflict
+
+## 2026-07-02T09:30:00+00:00 — Web UI for Cognitive Dashboard
+
+**Q:** User requested a modern web UI for the Cognitive Dashboard.
+**A:** Created `webui/` package with FastAPI + dark glassmorphism theme: Landing page (`index.html`) with topic input, depth/mode selects, and example tags. Dashboard page (`dashboard.html`) renders: animated dimension bars, concept cards with constraint/failure chips, sequence timelines, causal loop diagrams, comparison matrices, force-directed interactive knowledge graph on Canvas, scale layer tags, expert notes, and clickable references from web research. `styles.css` uses CSS variables for design tokens, backdrop-blur glass panels, floating gradient orbs, grid background pattern. `dash.js` handles all client-side rendering. Wired `--web` CLI flag to launch FastAPI server on port 8000. Added fastapi+uvicorn to pyproject.toml. Fixed missing `import uvicorn` in cli.py `_launch_web_server`.
+
+## 2026-07-02T00:00:00+00:00 — Done yet?
+
+**Q:** User asked if work is done.
+**A:** Confirmed all phases complete: Phase 1 (ReAct MVP + 4 tools), Phase 2 (Memory + RAG + ChromaDB), Phase 3 (Critic + Dynamic Tools), Phase 4 (Autonomous Growth), and Phase 6 (UCT agent) — all implemented with 209 logged conversations, git committed, README written.
+
+## 2026-07-02T14:30:00+00:00 — Dashboard history persistence
+
+**Q:** The "Transformer attention mechanism" dashboard came up empty with no cached data to reload. User asked for history support.
+**A:** Added full history persistence to web UI:
+- Each completed dashboard saves JSON content + refs to `data/dashboard_history/` with timestamp metadata
+- `_generate_full()` checks cache first — reloads instantly if topic was generated before, skips LLM generation
+- New API endpoints: `GET /api/history` (list), `GET /api/history/{topic}` (load), `POST /api/regenerate` (force refresh), `DELETE /api/history/{topic}` and all
+- Landing page shows "Recent Topics" panel with clickable history items styled in glassmorphism dark theme
+- Form submit changed to `POST /api/dashboard` so new generations bypass GET cache
+
+## 2026-07-01T15:00:00+00:00 — UCT Phase 6 implementation complete
+
+**Q:** User asked to start building Phase 6.
+**A:** Built all 10 files in `uct/` package. Initial approach used per-concept LLM calls (12+ sequential) which was too slow (~6 min). Rewrote `generator.py` to use a single-shot mega-prompt that produces dimensions, concepts, sequence blocks, causal loops, matrices, edges, and scales in one ~60s LLM call. Fixed bugs: TopicModel missing default for dimension_profile, broken _generate_scales loop, Console import missing from renderer. Simplified compressor to derive levels from concept fields instead of extra LLM calls. Rewired `multi_agent.py` router with TEXTBOOK domain. Added `--uct-depth` and `--uct-mode` CLI flags in `config.py` + `cli.py`. TEXTBOOK queries bypass ReAct loop and call UCT engine directly. Verified: generator produces 6 concepts, 1 seq block, 1 causal loop, 1 matrix, 2 edges for "TCP congestion control". Renderer mock test shows full dashboard with dimension bars (█░░), concept table, knowledge graph edges, failure modes, constraints panels — all color-coded per dimension. Demo topic "observability in cloud and AI applications" ran end-to-end: routed to TEXTBOOK, generated 6 concepts (Telemetry, Distributed Tracing, Model Drift, XAI, SLOs, Feedback Loop), 7 typed edges (prerequisite, enables, specializes, historically_follows), rendered full cognitive dashboard + knowledge graph panel. Fixed exit crash (`'NoneType' object has no attribute 'get_session_messages'`) by guarding against None return from TEXTBOOK path. Fixed duplicate graph render block in cli.py.

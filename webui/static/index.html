@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morphos — Cognitive Dashboard</title>
+<link rel="stylesheet" href="/static/styles.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orb orb-1"></div>
+<div class="bg-orb orb-2"></div>
+<div class="bg-orb orb-3"></div>
+
+<header>
+  <div class="logo">
+    <span class="logo-icon">◈</span>
+    <h1>Morphos</h1>
+  </div>
+  <nav>
+    <a href="/" class="active">Dashboard</a>
+    <a href="#" onclick="document.getElementById('topicInput').focus()">New Topic</a>
+  </nav>
+</header>
+
+<main class="hero">
+  <div class="glass-card search-card">
+    <h2>Universal Cognitive Textbook</h2>
+    <p class="subtitle">Enter any topic to generate a structured knowledge dashboard with dimensions, concepts, causal loops, and more.</p>
+
+    <form id="searchForm" action="/api/data" method="get">
+      <div class="input-row">
+        <input type="text" name="topic" id="topicInput" placeholder='e.g. "observability in cloud and AI applications"' autocomplete="off" required />
+        <select name="depth" title="Depth">
+          <option value="0">Essence</option>
+          <option value="1" selected>Core</option>
+          <option value="2">Full</option>
+          <option value="3">Expert</option>
+        </select>
+        <select name="mode" title="Mode">
+          <option value="understand" selected>Understand</option>
+          <option value="exam">Exam</option>
+          <option value="practice">Practice</option>
+          <option value="research">Research</option>
+          <option value="overview">Overview</option>
+        </select>
+        <button type="submit" class="btn-generate" id="genBtn">Generate</button>
+      </div>
+    </form>
+
+    <div class="examples">
+      <span class="label">Try:</span>
+      <span class="tag" onclick="setTopic(this.textContent)">TCP congestion control</span>
+      <span class="tag" onclick="setTopic(this.textContent)">Transformer attention mechanism</span>
+      <span class="tag" onclick="setTopic(this.textContent)">Microservices architecture</span>
+      <span class="tag" onclick="setTopic(this.textContent)">Distributed consensus protocols</span>
+      <span class="tag" onclick="setTopic(this.textContent)">Neural network backpropagation</span>
+    </div>
+
+    <div id="historySection">
+      <h3 style="margin-bottom:12px;color:var(--text-secondary);font-size:.9rem;font-weight:600">Recent Topics</h3>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <div id="features" class="features-row">
+    <div class="glass-card feat">
+      <div class="feat-icon">◐</div>
+      <h3>Cognitive Dimensions</h3>
+      <p>Structural, sequential, causal, comparative, spatial, abstract — visualized as animated bars.</p>
+    </div>
+    <div class="glass-card feat">
+      <div class="feat-icon">◉</div>
+      <h3>Knowledge Graph</h3>
+      <p>Interactive force-directed graph showing prerequisite, enables, specializes edges between concepts.</p>
+    </div>
+    <div class="glass-card feat">
+      <div class="feat-icon">∞</div>
+      <h3>Causal Loops</h3>
+      <p>Feedback systems rendered with reinforcing and balancing cycle diagrams.</p>
+    </div>
+    <div class="glass-card feat">
+      <div class="feat-icon">◫</div>
+      <h3>Sources & References</h3>
+      <p>Web-researched sources displayed as clickable citations for every generated dashboard.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Built with Morphos · Powered by local LLMs
+</footer>
+
+<script src="/static/dash.js"></script>
+</body>
+</html>
+

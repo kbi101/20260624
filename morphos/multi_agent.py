@@ -9,6 +9,8 @@ ROUTER_PROMPT = r"""You are a query router. Classify this user query into one of
 - FINANCE: stock prices, ETFs, market data, currency, cryptocurrency, financial instruments
 - RESEARCH: general knowledge, facts, explanations, comparisons, definitions, historical events, science
 - CODING: programming questions, code reviews, debugging, algorithms, scripts, code generation
+- TEXTBOOK: deep systematic explanations of complex technical/academic topics, "explain X thoroughly", 
+  "teach me Y", requests for structured knowledge, textbook-style treatment of frameworks/architectures/theories
 
 Query: {query}
 
@@ -51,6 +53,16 @@ DEFAULT_AGENTS = {
             "Explain your reasoning for design choices."
         ),
         allowed_tools=["python_exec", "calculator", "file_read", "directory_search"],
+    ),
+    "TEXTBOOK": SubAgentConfig(
+        name="textbook_agent",
+        system_prompt_addon=(
+            "You are a Universal Cognitive Textbook engine. Your job is NOT to write prose explanations. "
+            "Given a topic, use the uct_generate tool to decompose it into cognitive dimensions, "
+            "generate structured Knowledge Objects, and render them as a terminal dashboard. "
+            "First do web_search to gather current context, then call uct_generate with that research."
+        ),
+        allowed_tools=["uct_generate", "web_search", "web_fetch"],
     ),
 }
 

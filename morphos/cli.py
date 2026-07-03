@@ -54,6 +54,24 @@ ALL_TOOLS = {
 }
 
 
+def _lazy_register_uct():
+    """Lazy-add UCT tool so the import doesn't fire at module level."""
+    try:
+        def _uct_factory(cfg):
+            from uct.toolkit import UCTGenerate as UCTGen
+            return UCTGen(
+                llm_client=__import__('morphos.llm', fromlist=['LLMClient']).LLMClient(model=cfg.model, config=cfg),
+                depth=getattr(cfg, "uct_depth", 1),
+                mode=getattr(cfg, "uct_mode", "understand"),
+            )
+        ALL_TOOLS["uct_generate"] = _uct_factory
+    except ImportError:
+        pass
+
+
+_lazy_register_uct()
+
+
 def make_agent(config=None, system_addon=None, allowed_tools=None):
     """Create a single agent, optionally with narrowed tool set and prompt addon."""
     from morphos.memory.chroma_store import ChromaStore
@@ -130,6 +148,18 @@ def run_agent(query: str, config: Config):
     if config.multi_agent:
         from morphos.multi_agent import RouterAgent
         from morphos.llm import LLMClient
+
+        domain = RouterAgent(
+            llm_client=LLMClient(model=config.model, config=config),
+            agent_factory=make_agent,
+        ).classify(query)
+
+        console.print(f"[bold blue]🔀 Routed to {domain}[/]")
+
+        if domain == "TEXTBOOK":
+            _run_textbook(query, config)
+            return None
+
         router = RouterAgent(
             llm_client=LLMClient(model=config.model, config=config),
             agent_factory=make_agent,
@@ -157,6 +187,56 @@ def run_agent(query: str, config: Config):
         label = f"{elapsed_s:.1f}", "s"
     console.print(f"[dim]✓ {ts_end} — Query completed in {label[0]} {label[1]}[/]")
     return agent
+
+
+def _run_textbook(query: str, config: Config):
+    """Research topic online, invoke UCT engine for TEXTBOOK domain, display dashboard + references."""
+    from morphos.llm import LLMClient
+    from uct.engine import UCTEngine
+
+    # ── Web research phase ────────────────────────────────────────
+    search_tool = WebSearch()
+    fetch_tool = WebFetch(timeout=config.web_timeout)
+    
+    console.print("[dim]🔍 Researching topic online...[/]")
+    results_text = search_tool.execute(query, max_results=8)
+    
+    url_titles = []
+    research_parts = []
+    
+    import re as _re
+    link_matches = _re.findall(r'URL:\s*(https?://\S+)', results_text)
+    
+    for url in link_matches[:3]:
+        console.print(f"[dim]  Fetching: {url}[/]")
+        fetched = fetch_tool.execute(url)
+        title_match = _re.search(r'\[(.+?)\]', fetched)
+        t = title_match.group(1) if title_match else url[:80]
+        content = fetched[len(title_match.group(0)):] if title_match else fetched
+        url_titles.append((t, url))
+        research_parts.append(content[:2000].strip())
+    
+    research_context = "\n\n".join(research_parts)
+    
+    # ── UCT generation with research context ──────────────────────
+    llm = LLMClient(model=config.model, config=config)
+    engine = UCTEngine(llm, depth=config.uct_depth, mode=config.uct_mode)
+    rendered, model = engine.generate_dashboard(query, research_context=research_context)
+
+    console.print(Panel(rendered, title=f"[green]📖 Cognitive Dashboard — {query}", border_style="green"))
+
+    # ── References list ──────────────────────────────────────────
+    if url_titles:
+        ref_lines = []
+        for i, (t, u) in enumerate(url_titles, 1):
+            ref_lines.append(f"[{i}] [blue]{t}[/]")
+            ref_lines.append(f"    {u}")
+        console.print(Panel("\n".join(ref_lines), title="[yellow]References", border_style="yellow"))
+
+    # Render knowledge graph if depth >= 2
+    if config.uct_depth >= 2:
+        graph = engine.build_graph(model)
+        console.print(Panel(graph.terminal_render(), title="[yellow]Knowledge Graph", border_style="yellow"))
 
 
 def run_interactive(config: Config):
@@ -189,7 +269,8 @@ def run_interactive(config: Config):
         try:
             agent = run_agent(query, config)
             _last_agent[0] = agent
-            all_messages.extend(agent.get_session_messages())
+            if agent:
+                all_messages.extend(agent.get_session_messages())
         except Exception as e:
             console.print(f"[bold red]Error:[/] {e}")
 
@@ -282,6 +363,9 @@ def main():
     parser.add_argument("--backend", default="ollama", choices=["ollama", "openrouter"], help="LLM backend (default: ollama)")
     parser.add_argument("--openrouter-model", default=None, help="OpenRouter model slug (e.g. google/gemini-2.0-flash)")
     parser.add_argument("--openrouter-key", default=None, help="OpenRouter API key (or set OPENROUTER_API_KEY env var)")
+    parser.add_argument("--uct-depth", type=int, default=1, help="UCT depth: 0=essence, 1=core, 2=full, 3=expert")
+    parser.add_argument("--uct-mode", default="understand", choices=["understand", "exam", "practice", "research", "overview"], help="UCT rendering mode")
+    parser.add_argument("--web", action="store_true", help="Launch web UI for Cognitive Dashboard instead of terminal")
     args = parser.parse_args()
 
     config = Config(
@@ -296,14 +380,42 @@ def main():
         backend=args.backend,
         openrouter_model=args.openrouter_model,
         openrouter_api_key=args.openrouter_key,
+        uct_depth=args.uct_depth,
+        uct_mode=args.uct_mode,
     )
 
-    if args.grow:
+    if args.web:
+        _launch_web_server(args)
+    elif args.grow:
         _run_growth_cycle(config)
     elif args.query:
         run_agent(args.query, config)
     else:
         run_interactive(config)
+
+
+def _launch_web_server(args):
+    """FastAPI server with web UI for UCT Cognitive Dashboard."""
+    import subprocess as _sub
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _server_dir = _Path(__file__).resolve().parent.parent
+    console.print("[bold blue]Launching Morphos Web UI…[/]")
+    port = getattr(args, 'port', 8000)
+    console.print(f"[dim]Open http://localhost:{port}[/]")
+
+    proc = _sub.Popen([
+        _sys.executable, "-m", "uvicorn", "webui.server:app",
+        "--host", "127.0.0.1", "--port", str(port),
+    ], cwd=str(_server_dir))
+
+    try:
+        proc.wait()
+    except KeyboardInterrupt:
+        console.print("\n[dim]Shutting down server…[/]")
+        proc.terminate()
+        proc.wait(timeout=5)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ dependencies = [
     "readability-lxml",
     "rich",
     "chromadb",
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.scripts]

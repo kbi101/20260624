@@ -26,6 +26,10 @@ class Config:
     openrouter_model: str = None
     openrouter_api_key: str = None
 
+    # Phase 6 — UCT Agent
+    uct_depth: int = 1
+    uct_mode: str = "understand"
+
     def __post_init__(self):
         if self.openrouter_api_key is None:
             self.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")

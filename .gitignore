@@ -2,8 +2,10 @@ __pycache__/
 *.pyc
 *.pyo
 data/vector_store/
+data/dashboard_history/*.json
 data/logs/
 data/growth_report_*.json
 *.egg-info/
 .venv/
 env/
+debug.log
