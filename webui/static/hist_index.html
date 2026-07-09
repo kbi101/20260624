@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HIST — History Knowledge Graph</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .hist-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr 360px;
+      gap: 16px;
+      height: calc(100vh - 64px);
+      overflow: hidden;
+    }
+
+    .hist-sidebar { background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(18px); border-radius: var(--radius-lg); padding: 20px; overflow-y: auto; }
+    .hist-sidebar h3 { font-size: .85rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); margin-bottom: 14px; }
+
+    .timeline-panel { position: relative; background: rgba(255,255,255,.02); border-radius: var(--radius-lg); overflow: hidden; min-height: 0; }
+    .timeline-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: rgba(8,9,13,.6); backdrop-filter: blur(12px); border-bottom: 1px solid var(--glass-border); }
+    .timeline-header input { flex: 1; max-width: 500px; padding: 10px 14px; border: 1px solid var(--glass-border); border-radius: var(--radius-md); background: rgba(255,255,255,.04); color: var(--text-primary); font-size: .9rem; outline: none; }
+    .timeline-header input:focus { border-color: var(--accent-1); }
+
+    .timeline-header button { padding: 10px 18px; border: none; border-radius: var(--radius-md); background: var(--accent-1); color: white; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .timeline-header button:hover { background: #5a4bd1; }
+
+    canvas#timeline { display: block; width: 100%; height: calc(100% - 70px); }
+
+    .person-grid { padding: 16px; overflow-y: auto; max-height: calc(100% - 56px); border-bottom: 1px solid var(--glass-border); }
+    .person-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .person-chip { padding: 5px 12px; border-radius: 999px; font-size: .75rem; background: rgba(253,121,168,.12); color: var(--accent-3); cursor: pointer; transition: all .2s; }
+    .person-chip:hover, .person-chip.active { background: rgba(253,121,168,.25); box-shadow: 0 0 8px rgba(253,121,168,.2); }
+
+    .answer-panel { padding: 16px; overflow-y: auto; color: var(--text-primary); font-size: .9rem; line-height: 1.65; }
+    .answer-panel h4 { margin-bottom: 10px; color: var(--accent-2); }
+    .evidence-toggle { cursor: pointer; color: var(--accent-1); text-decoration: underline; font-size: .8rem; display: inline-block; margin-top: 10px; }
+    .evidence-list { margin-top: 8px; padding: 8px 12px; background: rgba(255,255,255,.02); border-radius: var(--radius-sm); font-size: .78rem; color: var(--text-secondary); max-height: 240px; overflow-y: auto; display: none; }
+
+    .node-card { margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,.03); border-radius: var(--radius-md); border-left: 3px solid var(--accent-1); }
+    .node-card h4 { font-size: .9rem; margin-bottom: 6px; color: var(--text-primary); }
+    .node-card pre { font-size: .72rem; background: rgba(0,0,0,.3); padding: 8px; border-radius: var(--radius-sm); overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 160px; }
+    .node-card a { color: var(--accent-2); font-size: .75rem; text-decoration: none; }
+    .node-card a:hover { text-decoration: underline; }
+    .conn-row { display: flex; gap: 4px; align-items: center; font-size: .78rem; margin-top: 4px; }
+    .conn-label { color: var(--text-muted); }
+    .conn-node { cursor: pointer; color: var(--accent-1); }
+    .conn-node:hover { text-decoration: underline; }
+
+    .stats-badge { font-size: .8rem; padding: 6px 14px; background: rgba(0,206,201,.1); color: var(--accent-2); border-radius: 999px; }
+    .empty-msg { color: var(--text-muted); text-align: center; padding: 30px 0; font-size: .85rem; }
+
+    .ingest-row { display: flex; gap: 6px; margin-bottom: 12px; }
+    .ingest-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--glass-border); border-radius: var(--radius-md); background: rgba(255,255,255,.04); color: var(--text-primary); font-size: .85rem; outline: none; }
+    .ingest-row input:focus { border-color: var(--accent-1); }
+    .ingest-row button { padding: 8px 14px; border: none; border-radius: var(--radius-md); background: var(--accent-2); color: #000; font-weight: 600; cursor: pointer; white-space: nowrap; }
+
+    .filter-bar { display: flex; gap: 8px; align-items: center; margin-left: 12px; }
+    .filter-btn { padding: 4px 10px; border-radius: 999px; font-size: .72rem; background: rgba(255,255,255,.05); color: var(--text-secondary); cursor: pointer; border: 1px solid var(--glass-border); transition: all .2s; }
+    .filter-btn.on { border-color: var(--accent-2); color: var(--accent-2); background: rgba(0,206,201,.1); }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-icon">⚙</span>
+      <h1 style="font-size:1rem;">HIST</h1>
+    </div>
+    <nav>
+      <a href="/">Cognitive Dashboard</a>
+      <a href="/hist" class="active">History Graph</a>
+    </nav>
+    <span class="stats-badge" id="statsBadge">loading…</span>
+  </header>
+
+  <div style="height:64px"></div>
+
+  <main class="hist-layout">
+    <!-- Left sidebar: node details -->
+    <aside class="hist-sidebar" id="leftPanel">
+      <h3>Ingest</h3>
+      <div class="ingest-row">
+        <input type="text" id="seedInput" placeholder="Wikipedia topic…">
+        <button onclick="doIngest()">+</button>
+      </div>
+      <div style="text-align:right;">
+        <button style="padding:4px 10px; font-size:.75rem; border-radius:var(--radius-sm); background:rgba(255,255,255,.06); color:var(--text-secondary); border:1px solid var(--glass-border); cursor:pointer;" onclick="doIngestAll()">Process all queued</button>
+      </div>
+
+      <div id="nodeDetailArea">
+        <p class="empty-msg">Click a node on the timeline to inspect it.</p>
+      </div>
+    </aside>
+
+    <!-- Center: timeline + person grid -->
+    <section class="timeline-panel" id="centerPanel">
+      <div class="timeline-header">
+        <input type="text" id="askInput" placeholder="Ask a question about history…" onkeydown="if(event.key==='Enter')doAsk()">
+        <button onclick="doAsk()">Ask</button>
+        <span id="askStats" style="color:var(--text-muted);font-size:.75rem;padding-right:12px;"></span>
+      </div>
+      <div class="person-grid">
+        <div class="person-chips" id="personChips"></div>
+      </div>
+      <canvas id="timeline"><!—— Timeline canvas ——></canvas>
+    </section>
+
+    <!-- Right sidebar: Q&A -->
+    <aside class="hist-sidebar" id="rightPanel">
+      <h3>Answer</h3>
+      <div id="answerArea">
+        <p class="empty-msg">Submit a question above.</p>
+      </div>
+    </aside>
+  </main>
+
+<script src="/static/hist_timeline.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+[
+  {
+    "timestamp": "2026-07-08T22:13:05.676858+00:00",
+    "phase": "007",
+    "change_type": "schema_created",
+    "details": "Created DB 'hist' at bolt://localhost:7689. Unique constraints on node_id for Event and Person labels."
+  }
+]

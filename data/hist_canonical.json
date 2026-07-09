@@ -1,0 +1,275 @@
+{
+  "american_civil_war": {
+    "canonical_id": "american_civil_war",
+    "names": [
+      "American Civil War"
+    ],
+    "first_seen": "2026-07-09T11:33:12.315412"
+  },
+  "abraham_lincoln": {
+    "canonical_id": "abraham_lincoln",
+    "names": [
+      "Abraham Lincoln"
+    ],
+    "first_seen": "2026-07-09T11:33:12.315909"
+  },
+  "jefferson_davis": {
+    "canonical_id": "jefferson_davis",
+    "names": [
+      "Jefferson Davis"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316052"
+  },
+  "robert_e_lee": {
+    "canonical_id": "robert_e_lee",
+    "names": [
+      "Robert E. Lee"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316175"
+  },
+  "ulysses_s_grant": {
+    "canonical_id": "ulysses_s_grant",
+    "names": [
+      "Ulysses S. Grant"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316301"
+  },
+  "william_tecumseh_sherman": {
+    "canonical_id": "william_tecumseh_sherman",
+    "names": [
+      "William Tecumseh Sherman"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316400"
+  },
+  "siege_of_vicksburg": {
+    "canonical_id": "siege_of_vicksburg",
+    "names": [
+      "Siege of Vicksburg"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316516"
+  },
+  "battle_of_gettysburg": {
+    "canonical_id": "battle_of_gettysburg",
+    "names": [
+      "Battle of Gettysburg"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316631"
+  },
+  "fall_of_atlanta": {
+    "canonical_id": "fall_of_atlanta",
+    "names": [
+      "Fall of Atlanta"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316761"
+  },
+  "march_to_the_sea": {
+    "canonical_id": "march_to_the_sea",
+    "names": [
+      "March to the Sea"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316871"
+  },
+  "siege_of_petersburg": {
+    "canonical_id": "siege_of_petersburg",
+    "names": [
+      "Siege of Petersburg"
+    ],
+    "first_seen": "2026-07-09T11:33:12.316981"
+  },
+  "battle_of_appomattox_court_house": {
+    "canonical_id": "battle_of_appomattox_court_house",
+    "names": [
+      "Battle of Appomattox Court House"
+    ],
+    "first_seen": "2026-07-09T11:33:12.317092"
+  },
+  "hooker_and_hood_attack": {
+    "canonical_id": "hooker_and_hood_attack",
+    "names": [
+      "Hooker and Hood attack"
+    ],
+    "first_seen": "2026-07-09T14:07:10.067751"
+  },
+  "joseph_hooker": {
+    "canonical_id": "joseph_hooker",
+    "names": [
+      "Joseph Hooker"
+    ],
+    "first_seen": "2026-07-09T14:07:10.068365"
+  },
+  "stonewall_jackson": {
+    "canonical_id": "stonewall_jackson",
+    "names": [
+      "Stonewall Jackson"
+    ],
+    "first_seen": "2026-07-09T14:07:10.069429"
+  },
+  "abner_doubleday": {
+    "canonical_id": "abner_doubleday",
+    "names": [
+      "Abner Doubleday"
+    ],
+    "first_seen": "2026-07-09T14:07:10.069595"
+  },
+  "james_ricketts": {
+    "canonical_id": "james_ricketts",
+    "names": [
+      "James Ricketts"
+    ],
+    "first_seen": "2026-07-09T14:07:10.069757"
+  },
+  "george_meade": {
+    "canonical_id": "george_meade",
+    "names": [
+      "George Meade"
+    ],
+    "first_seen": "2026-07-09T14:07:10.069970"
+  },
+  "alexander_lawton": {
+    "canonical_id": "alexander_lawton",
+    "names": [
+      "Alexander Lawton"
+    ],
+    "first_seen": "2026-07-09T14:07:10.070297"
+  },
+  "john_r_jones": {
+    "canonical_id": "john_r_jones",
+    "names": [
+      "John R. Jones"
+    ],
+    "first_seen": "2026-07-09T14:07:10.070503"
+  },
+  "jeb_stuart": {
+    "canonical_id": "jeb_stuart",
+    "names": [
+      "Jeb Stuart"
+    ],
+    "first_seen": "2026-07-09T14:07:10.070700"
+  },
+  "stephen_d_lee": {
+    "canonical_id": "stephen_d_lee",
+    "names": [
+      "Stephen D. Lee"
+    ],
+    "first_seen": "2026-07-09T14:07:10.070887"
+  },
+  "truman_seymour": {
+    "canonical_id": "truman_seymour",
+    "names": [
+      "Truman Seymour"
+    ],
+    "first_seen": "2026-07-09T14:07:10.071059"
+  },
+  "james_walker": {
+    "canonical_id": "james_walker",
+    "names": [
+      "James Walker"
+    ],
+    "first_seen": "2026-07-09T14:07:10.071222"
+  },
+  "abram_duryee": {
+    "canonical_id": "abram_duryee",
+    "names": [
+      "Abram Dury\u00e9e"
+    ],
+    "first_seen": "2026-07-09T14:07:10.071411"
+  },
+  "marcellus_douglass": {
+    "canonical_id": "marcellus_douglass",
+    "names": [
+      "Marcellus Douglass"
+    ],
+    "first_seen": "2026-07-09T14:07:10.071748"
+  },
+  "george_l_hartsuff": {
+    "canonical_id": "george_l_hartsuff",
+    "names": [
+      "George L. Hartsuff"
+    ],
+    "first_seen": "2026-07-09T14:07:10.072036"
+  },
+  "william_h_christian": {
+    "canonical_id": "william_h_christian",
+    "names": [
+      "William H. Christian"
+    ],
+    "first_seen": "2026-07-09T14:07:10.072261"
+  },
+  "harry_hays": {
+    "canonical_id": "harry_hays",
+    "names": [
+      "Harry Hays"
+    ],
+    "first_seen": "2026-07-09T14:07:10.072471"
+  },
+  "john_gibbon": {
+    "canonical_id": "john_gibbon",
+    "names": [
+      "John Gibbon"
+    ],
+    "first_seen": "2026-07-09T14:07:10.072682"
+  },
+  "starke": {
+    "canonical_id": "starke",
+    "names": [
+      "Starke"
+    ],
+    "first_seen": "2026-07-09T14:07:10.072894"
+  },
+  "mclaws": {
+    "canonical_id": "mclaws",
+    "names": [
+      "McLaws"
+    ],
+    "first_seen": "2026-07-09T14:07:10.073110"
+  },
+  "richard_h_anderson": {
+    "canonical_id": "richard_h_anderson",
+    "names": [
+      "Richard H. Anderson"
+    ],
+    "first_seen": "2026-07-09T14:07:10.073328"
+  },
+  "george_t_anderson": {
+    "canonical_id": "george_t_anderson",
+    "names": [
+      "George T. Anderson"
+    ],
+    "first_seen": "2026-07-09T14:07:10.073527"
+  },
+  "hood": {
+    "canonical_id": "hood",
+    "names": [
+      "Hood"
+    ],
+    "first_seen": "2026-07-09T14:07:10.073730"
+  },
+  "d_h_hill": {
+    "canonical_id": "d_h_hill",
+    "names": [
+      "D.H. Hill"
+    ],
+    "first_seen": "2026-07-09T14:07:10.073956"
+  },
+  "jubal_early": {
+    "canonical_id": "jubal_early",
+    "names": [
+      "Jubal Early"
+    ],
+    "first_seen": "2026-07-09T14:07:10.074314"
+  },
+  "abram_duriee": {
+    "canonical_id": "abram_duriee",
+    "names": [
+      "Abram Dury\u00e9e"
+    ],
+    "first_seen": "2026-07-09T15:58:45.916737"
+  },
+  "general_lee": {
+    "canonical_id": "general_lee",
+    "names": [
+      "General Lee"
+    ],
+    "first_seen": "2026-07-09T15:58:45.919288"
+  }
+}

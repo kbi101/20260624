@@ -245,6 +245,16 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 **Q:** Asked to commit and push all changes.
 **A:** Staged all files, updated .gitignore to exclude debug.log and cached dashboard JSONs. Committed 29 files (+3468 lines) and pushed to main on GitHub. Updated conversations.md with this exchange.
 
+## 2026-07-09T14:30:00+00:00 — Orchestrator + timeline UI design
+
+**Q:** User confirmed database status, then asked for orchestrator to keep improving the DB. Wanted a UI for graph viewing + Q&A, with four decisions: Neo4j Bloom-style timeline view, hand-written Cypher templates with LLM fallback, isolated HIST (no Morphos router), and a 007.1 spec file.
+**A:** Built `hist/orchestrator.py` with bootstrap_schema(), ingest_page(), ingest_queue(), graph_stats(). Fixed bugs: duplicate inline imports in extractor.py (NameError for re/json), Neo4j ResultConsumedError from closing session before consuming iterator, CREATE→MERGE on edges to prevent duplicates. Cleaned orphan nodes and duplicate edges in DB. Pipelined full test — "Battle of Antietam" ingested 23 entities + 2 edges successfully. Wrote `spec/007.1-Hist-QueryTimelineUI.md` detailing: Cypher query engine with 6 hand-written templates + LLM fallback, essay formatter (evidence-to-answer LLM pass), Bloom-style horizontal Canvas timeline with person grid below, node detail side cards, search/Q&A panel, FastAPI routes under webui/hist_app.py. Implementation order specified.
+
+## 2026-07-09T14:00:00+00:00 — Spec sync pass
+
+**Q:** User asked to make sure HIST spec and code are in sync. Found port mismatch (7687 vs 7689), property name mismatch (`node_type` vs `entity_type`), missing properties, no orchestrator/code wiring, stale Phase 1 spec file.
+**A:** Rewrote `spec/007-Hist-System-Scope.md` to v0.2 matching actual code: corrected port, added full package layout, rewrote node/edge design around what the code actually does (LLM-extracted `entity_type`, generic relation types, normalize/store pipeline), added ingestion pipeline flowchart with file references, missing components table, data files table, and progress tracking. Deleted obsolete `HIST.spec.phase1.md` (JSON-on-disk approach replaced by Neo4j).
+
 ## 2026-07-01T15:00:00+00:00 — UCT Phase 6 implementation complete
 
 **Q:** User asked to start building Phase 6.
