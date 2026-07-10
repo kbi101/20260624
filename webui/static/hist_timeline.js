@@ -1,4 +1,4 @@
-/* ── HIST Timeline Renderer ─────────────────────────────────────────── */
+/* ── HIST Timeline + Graph Renderer ─────────────────────────────────────────── */
 
 let G = { events: [], persons: [], edges: [] };
 let selectedNode = null;
@@ -8,6 +8,11 @@ let showPersons = true;
 let showEvents = true;
 let timelineZoom = 1;
 let timelineOffsetX = 0;
+let viewMode = "timeline";  // "timeline" or "graph"
+
+// Graph view state
+let graphNodes = [];  // Computed positions for force simulation
+let simulating = false;
 
 const canvas = document.getElementById("timeline");
 const ctx = canvas.getContext("2d");
@@ -170,6 +175,20 @@ function resizeCanvas() {
 
 function renderTimeline() {
   resizeCanvas();
+  
+  // Switch between timeline and graph views
+  if (viewMode === "graph") {
+    if (!graphNodes.length) {
+      initGraphPositions();
+      simulating = true;
+      runGraphSimulation();
+      return;
+    }
+    renderGraphView();
+    return;
+  }
+  
+  // Timeline view
   const W = canvas.width / devicePixelRatio;
   const H = canvas.height / devicePixelRatio;
 
@@ -322,6 +341,198 @@ function renderTimeline() {
   }
 
   ctx.restore();
+}
+
+/* ── Graph View Renderer (force-directed) ───────────────────────── */
+
+function initGraphPositions() {
+  // Initialize positions for all nodes
+  graphNodes = [];
+  const W = canvas.width / devicePixelRatio;
+  const H = canvas.height / devicePixelRatio;
+  
+  // Add events
+  G.events.forEach(e => {
+    graphNodes.push({
+      node_id: e.node_id,
+      name: e.name || e.node_id,
+      type: "event",
+      year: e.year || 0,
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: 0, vy: 0,
+      mass: 2
+    });
+  });
+  
+  // Add persons
+  G.persons.forEach(p => {
+    graphNodes.push({
+      node_id: p.node_id,
+      name: p.name || p.node_id,
+      type: "person",
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: 0, vy: 0,
+      mass: 1.5
+    });
+  });
+}
+
+function runGraphSimulation() {
+  if (!simulating) return;
+  
+  const W = canvas.width / devicePixelRatio;
+  const H = canvas.height / devicePixelRatio;
+  const center = { x: W / 2, y: H / 2 };
+  
+  // Force parameters
+  const repelStrength = 800;
+  const attractStrength = 0.8;
+  const damping = 0.85;
+  const maxDisplacement = 50;
+  
+  // Build edge lookups
+  const nodeIndex = new Map(graphNodes.map(n => [n.node_id, n]));
+  
+  // Apply repulsion between all node pairs
+  for (let i = 0; i < graphNodes.length; i++) {
+    for (let j = i + 1; j < graphNodes.length; j++) {
+      const a = graphNodes[i];
+      const b = graphNodes[j];
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const force = repelStrength / (dist * dist);
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      
+      a.vx -= fx * b.mass;
+      a.vy -= fy * b.mass;
+      b.vx += fx * a.mass;
+      b.vy += fy * a.mass;
+    }
+  }
+  
+  // Apply attraction along edges
+  G.edges.forEach(edge => {
+    const a = nodeIndex.get(edge.src);
+    const b = nodeIndex.get(edge.tgt);
+    if (!a || !b) return;
+    
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 0) {
+      const force = (dist - 150) * attractStrength;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      
+      a.vx += fx;
+      a.vy += fy;
+      b.vx -= fx;
+      b.vy -= fy;
+    }
+  });
+  
+  // Center gravitation
+  graphNodes.forEach(node => {
+    const dx = center.x - node.x;
+    const dy = center.y - node.y;
+    const force = 0.1;
+    node.vx += dx * force;
+    node.vy += dy * force;
+    
+    // Apply damping
+    node.vx *= damping;
+    node.vy *= damping;
+    
+    // Apply velocity (capped)
+    const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+    if (speed > 0) {
+      const cap = Math.min(speed, maxDisplacement);
+      node.x += (node.vx / speed) * cap;
+      node.y += (node.vy / speed) * cap;
+    }
+    
+    // Keep in bounds
+    node.x = Math.max(20, Math.min(W - 20, node.x));
+    node.y = Math.max(20, Math.min(H - 20, node.y));
+  });
+  
+  renderGraphView();
+  requestAnimationFrame(runGraphSimulation);
+}
+
+function renderGraphView() {
+  const W = canvas.width / devicePixelRatio;
+  const H = canvas.height / devicePixelRatio;
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  // Draw edges
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.lineWidth = 1;
+  G.edges.forEach(edge => {
+    const src = graphNodes.find(n => n.node_id === edge.src);
+    const tgt = graphNodes.find(n => n.node_id === edge.tgt);
+    if (src && tgt) {
+      ctx.beginPath();
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(tgt.x, tgt.y);
+      ctx.stroke();
+    }
+  });
+  
+  // Draw nodes
+  graphNodes.forEach(node => {
+    const isSelected = selectedNode === node.node_id;
+    const isHovered = highlightNode === node.node_id;
+    const alpha = isSelected || isHovered ? 1 : 0.6;
+    
+    ctx.globalAlpha = alpha;
+    
+    // Node body
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, isSelected ? 9 : 7, 0, Math.PI * 2);
+    ctx.fillStyle = node.type === "event" ? "#6c5ce7" : "#fd79a8";
+    ctx.fill();
+    
+    if (isSelected) {
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    
+    // Label
+    if (isSelected || isHovered) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 11px Inter";
+      ctx.textAlign = "center";
+      const clamped = node.name.length > 20 ? node.name.slice(0, 17) + "…" : node.name;
+      ctx.fillText(clamped, node.x, node.y - 14);
+    }
+  });
+  
+  ctx.globalAlpha = 1;
+  
+  // Legend
+  ctx.font = "11px Inter";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(108,92,231,0.8)";
+  ctx.fillText("● Events", W - 20, H - 12);
+  ctx.fillStyle = "rgba(253,121,168,0.8)";
+  ctx.fillText("● Persons", W - 20, H - 28);
+  
+  // Zoom controls
+  const zoomStr = document.getElementById("askStats").textContent;
+  if (!zoomStr.includes("zoom")) {
+    ctx.font = "10px Inter";
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fillText("Scroll to zoom • Drag to pan", W - 20, H - 45);
+  }
 }
 
 function fillRoundRect(c, x, y, w, h, r) {

@@ -15,6 +15,11 @@ from pydantic import BaseModel
 app = FastAPI(title="Morphos Cognitive Dashboard")
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
+from fastapi.staticfiles import StaticFiles as _SF
+
+from webui.hist_app import router as hist_router
+app.include_router(hist_router)
+
 _uct_depth = 1
 _uct_mode = "understand"
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -378,6 +383,16 @@ def _generate_full(topic: str, depth: int, mode: str):
     refs_json = [{"title": t, "url": u} for t, u in ref_urls]
     _save_cached(topic, data, refs_json)
     return data, ref_urls
+
+
+@app.get("/hist", response_class=HTMLResponse)
+async def hist_page():
+    """Serve the HIST history graph page."""
+    hp = os.path.join(_TEMPLATE_DIR, "hist_index.html")
+    if os.path.exists(hp):
+        with open(hp) as f:
+            return f.read()
+    return HTMLResponse(content="<h1>HIST</h1><p>Page not found.</p>")
 
 
 @app.get("/", response_class=HTMLResponse)
