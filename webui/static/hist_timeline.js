@@ -496,51 +496,78 @@ function renderGraphView() {
   const H = canvas.height / devicePixelRatio;
   
   ctx.clearRect(0, 0, W, H);
-  
-  // Draw edges
-  ctx.strokeStyle = "rgba(255,255,255,0.2)";
-  ctx.lineWidth = 1;
+
+  // Pre-compute neighbor set for selected/hovered node
+  const highlightIds = new Set();
+  if (selectedNode || highlightNode) {
+    const targetId = selectedNode || highlightNode;
+    G.edges.forEach(edge => {
+      if (edge.src === targetId) highlightIds.add(edge.tgt);
+      if (edge.tgt === targetId) highlightIds.add(edge.src);
+    });
+  }
+
+  // Draw edges with type labels
   G.edges.forEach(edge => {
     const src = graphNodes.find(n => n.node_id === edge.src);
     const tgt = graphNodes.find(n => n.node_id === edge.tgt);
-    if (src && tgt) {
-      ctx.beginPath();
-      ctx.moveTo(src.x, src.y);
-      ctx.lineTo(tgt.x, tgt.y);
-      ctx.stroke();
+    if (!src || !tgt) return;
+    const isHighlighted = (selectedNode && (edge.src === selectedNode || edge.tgt === selectedNode)) ||
+                          (highlightNode && (edge.src === highlightNode || edge.tgt === highlightNode));
+    ctx.strokeStyle = isHighlighted ? "rgba(253,121,168,.6)" : "rgba(255,255,255,.15)";
+    ctx.lineWidth = isHighlighted ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(tgt.x, tgt.y);
+    ctx.stroke();
+
+    // Edge type label at midpoint
+    if (edge.type) {
+      const mx2 = (src.x + tgt.x) / 2;
+      const my2 = (src.y + tgt.y) / 2;
+      ctx.font = "9px Inter";
+      ctx.fillStyle = isHighlighted ? "#fd79a8" : "rgba(255,255,255,.35)";
+      ctx.textAlign = "center";
+      const bg2 = mx2 - ctx.measureText(edge.type).width / 2 - 4;
+      ctx.fillText(edge.type, mx2, my2);
     }
   });
-  
-  // Draw nodes
+
+  // Draw nodes — larger radius, labels always visible
   graphNodes.forEach(node => {
     const isSelected = selectedNode === node.node_id;
     const isHovered = highlightNode === node.node_id;
-    const alpha = isSelected || isHovered ? 1 : 0.6;
-    
+    const isNeighbor = highlightIds.has(node.node_id);
+    const alpha = (isSelected || isHovered || isNeighbor) ? 1 : 0.55;
+
     ctx.globalAlpha = alpha;
-    
-    // Node body
+
+    // Node body — bigger dots
+    const radius = isSelected ? 28 : (isHovered || isNeighbor ? 24 : 20);
     ctx.beginPath();
-    ctx.arc(node.x, node.y, isSelected ? 9 : 7, 0, Math.PI * 2);
+    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
     ctx.fillStyle = node.type === "event" ? "#6c5ce7" : "#fd79a8";
     ctx.fill();
-    
-    if (isSelected) {
+
+    if (isSelected || isHovered) {
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    
-    // Label
-    if (isSelected || isHovered) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 11px Inter";
-      ctx.textAlign = "center";
-      const clamped = node.name.length > 20 ? node.name.slice(0, 17) + "…" : node.name;
-      ctx.fillText(clamped, node.x, node.y - 14);
-    }
+
+    // Label always shown
+    ctx.globalAlpha = alpha > 0.7 ? 1 : 0.8;
+    ctx.fillStyle = isSelected ? "#fff" : (isHovered || isNeighbor ? "#dfe6e9" : "rgba(255,255,255,.7)");
+    ctx.font = `bold ${isSelected || isHovered ? 12 : 10}px Inter`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const maxChars = Math.floor((radius * 2.4) / 6);
+    const clamped = node.name.length > maxChars ? node.name.slice(0, maxChars - 1) + "…" : node.name;
+    ctx.fillText(clamped, node.x, node.y);
   });
+
+  ctx.globalAlpha = 1;
+  ctx.textBaseline = "alphabetic";
   
   ctx.globalAlpha = 1;
   
@@ -582,7 +609,20 @@ canvas.addEventListener("mousemove", e => {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  // Check if clicking on an event pill (approximate hit test)
+  if (viewMode === "graph") {
+    // Quick hit-test against nearby nodes only
+    let hit = null;
+    for (const nd of graphNodes) {
+      const dx = mx - nd.x;
+      const dy = my - nd.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 16) { hit = nd; break; }
+    }
+    highlightNode = hit ? hit.node_id : null;
+    renderTimeline();
+    return;
+  }
+
+  // Timeline mode only
   const years = G.events.map(ev => ev.year).filter(y => y != null && y > 1400);
   if (!years.length) return;
 
