@@ -13,7 +13,8 @@ let viewMode = "timeline";  // "timeline" or "graph"
 // Graph view state
 let graphNodes = [];  // Computed positions for force simulation
 let simulating = false;
-let settleCounter = 0;  // Frames with low velocity → auto-stop
+let simFrameCount = 0;  // Frames run this cycle (cap to auto-stop)
+const MAX_SIM_FRAMES = 500;
 
 function setViewMode(mode) {
   if (mode === viewMode) return;
@@ -23,7 +24,7 @@ function setViewMode(mode) {
   if (mode === "graph" && !graphNodes.length) {
     initGraphPositions();
     simulating = true;
-    settleCounter = 0;
+    simFrameCount = 0;
     runGraphSimulation();
   } else {
     simulating = false;
@@ -476,15 +477,11 @@ function runGraphSimulation() {
     // Keep in bounds
     node.x = Math.max(20, Math.min(W - 20, node.x));
     node.y = Math.max(20, Math.min(H - 20, node.y));
-
-    if (speed < 0.5) settleCounter++;
-    else settleCounter = 0;
   });
   
-  // Auto-stop after settling
-  if (settleCounter > 100) {
+  simFrameCount++;
+  if (simFrameCount > MAX_SIM_FRAMES) {
     simulating = false;
-    ctx.fillText("Layout settled.", W - 20, 30);
   } else {
     requestAnimationFrame(runGraphSimulation);
   }
