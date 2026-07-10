@@ -13,6 +13,23 @@ let viewMode = "timeline";  // "timeline" or "graph"
 // Graph view state
 let graphNodes = [];  // Computed positions for force simulation
 let simulating = false;
+let settleCounter = 0;  // Frames with low velocity → auto-stop
+
+function setViewMode(mode) {
+  if (mode === viewMode) return;
+  viewMode = mode;
+  document.getElementById("btnTimeline").classList.toggle("on", mode === "timeline");
+  document.getElementById("btnGraph").classList.toggle("on", mode === "graph");
+  if (mode === "graph" && !graphNodes.length) {
+    initGraphPositions();
+    simulating = true;
+    settleCounter = 0;
+    runGraphSimulation();
+  } else {
+    simulating = false;
+  }
+  renderTimeline();
+}
 
 const canvas = document.getElementById("timeline");
 const ctx = canvas.getContext("2d");
@@ -459,10 +476,19 @@ function runGraphSimulation() {
     // Keep in bounds
     node.x = Math.max(20, Math.min(W - 20, node.x));
     node.y = Math.max(20, Math.min(H - 20, node.y));
+
+    if (speed < 0.5) settleCounter++;
+    else settleCounter = 0;
   });
   
+  // Auto-stop after settling
+  if (settleCounter > 100) {
+    simulating = false;
+    ctx.fillText("Layout settled.", W - 20, 30);
+  } else {
+    requestAnimationFrame(runGraphSimulation);
+  }
   renderGraphView();
-  requestAnimationFrame(runGraphSimulation);
 }
 
 function renderGraphView() {
@@ -583,6 +609,20 @@ canvas.addEventListener("click", e => {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
+  if (viewMode === "graph") {
+    // Hit test graph nodes
+    for (const node of graphNodes) {
+      const dx = mx - node.x;
+      const dy = my - node.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 14) {
+        loadNodeDetail(node.node_id);
+        return;
+      }
+    }
+    return;
+  }
+
+  // Timeline mode click logic
   const years = G.events.map(ev => ev.year).filter(y => y != null && y > 1400);
   if (!years.length) return;
 

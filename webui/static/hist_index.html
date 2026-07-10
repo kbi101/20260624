@@ -102,6 +102,10 @@
       <div class="timeline-header">
         <input type="text" id="askInput" placeholder="Ask a question about history…" onkeydown="if(event.key==='Enter')doAsk()">
         <button onclick="doAsk()">Ask</button>
+        <div style="display:flex;gap:4px;margin-left:8px;">
+          <button id="btnTimeline" class="filter-btn on" onclick="setViewMode('timeline')">⏱ Timeline</button>
+          <button id="btnGraph" class="filter-btn" onclick="setViewMode('graph')">◎ Graph</button>
+        </div>
         <span id="askStats" style="color:var(--text-muted);font-size:.75rem;padding-right:12px;"></span>
       </div>
       <div class="person-grid">
