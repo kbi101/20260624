@@ -264,3 +264,55 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 
 **Q:** User said "start building!!!!"
 **A:** Built all 5 Phase 7.1 files per spec: `hist/query_engine.py` (9 templates + LLM fallback), `hist/formatter.py` (evidence→answer), `webui/hist_app.py` (FastAPI router), `webui/static/hist_index.html` (3-panel layout), `webui/static/hist_timeline.js` (Canvas timeline with zoom/pan/click-to-inspect). Wired into `server.py` with `/hist` route. Fixed multiple bugs: missing `_match_template`, deleted `_extract_query_text`, Neo4j 5.x syntax issues, multi-term CONTAINS split. Verified imports clean, queries return results. Committed and pushed 28 files (+2140 lines) to main.
+
+## 2026-07-10T07:30:00+00:00 — Phase 7.2 spec creation & graph viewer completion
+
+**Q:** User asked what we stopped at last session. Identified partial graph viewer work (uncommitted). User requested spec file `spec/007.2-Hist-GraphViewer.md` before continuing.
+**A:** Created spec file. Completed all 4 missing graph viewer features: (1) `[Timeline | Graph]` toggle buttons in header, (2) `setViewMode()` function to switch between views, (3) graph node click handler wired to `loadNodeDetail()`, (4) simulation auto-stop after 100 settled frames. Verified JS syntax clean. Committed and pushed as `084eb33`.
+
+## 2026-07-10T08:15:00+00:00 — Graph viewer fixes: labels, edges, speed, stability
+
+**Q:** Three issues reported: (1) dots too small, no node names visible, (2) few/no edges shown, missing edge types, (3) graph mouse interaction extremely slow. Then: first-load animation never stabilizes.
+**A:** Four commits:
+1. `084eb33` — Initial: toggle buttons + view switching + node click
+2. `c4d7630` — Mouse speed fixed (graph mode was recalculating timeline hit-tests every frame). Node radius 7→20px, labels always visible. Edge type text drawn at midpoint. Neighbor highlight on select/hover.
+3. `e00d6e8` — Stability fix: replace fragile settle detection with hard 500-frame cap. Settle counter never triggered because repulsion=800 caused perpetual oscillation. Now stops unconditionally after ~8s.
+
+## 2026-07-10T08:30:00+00:00 — Phase 7.2 final missing pieces
+
+**Q:** User asked how spec 007.2 was going, then asked to list unfinished work and complete it item by item.
+**A:** Two remaining items: stability detection (frame cap only) and drag node in graph view. Fixed both:
+1. Replaced hard frame cap with velocity-based convergence — stops when max speed < 0.5 for 50 consecutive frames. Extracted physics into `simulateGraphStep()` for reuse.
+2. Added drag-to-reposition for graph nodes — mousedown on node sets drag target, mousemove repositions + runs one physics step to settle neighbors, mouseup releases. Pan handler refactored with `isPanning` flag to avoid conflicts. Mouse/timelines logic split into clean graph vs timeline branches.
+
+## 2026-07-14T13:00:00+00:00 — Lee page fix + chunked relation extraction
+
+**Q:** User asked what we did so far, then asked to proceed with verifying the Lee page ingestion pipeline.
+**A:** Fixed `wikipedia.py`: was using bare `WebFetch` without import — added `from morphos.tools.web_fetch import WebFetch`, removed unused `_html_to_text` since WebFetch already returns clean readability text. Tested full Lee pipeline: fetch (6013 chars) → 24-30 entities extracted. Relation extraction timed out with all 26 entities in one prompt (3+ min). Fixed by chunking relations into groups of 8 persons per LLM call, deduplicating results. Full pipeline succeeded: Robert E. Lee ingested with 24 entities + 46 relations. Neo4j graph grew to 144 nodes, 112 edges. Lee has 14 direct edges (was 0 before). Lincoln still has 8 direct edges from prior batch.
+
+## 2026-07-15T09:00:00+00:00 — Three-tier web query cache (Phase 007.3)
+
+**Q:** User asked to implement a web query cache for HIST so re-ingesting already-completed pages is near-instant. Also asked for node position persistence on graph, drag-to-reposition fixes, and hit detection improvements.
+**A:** All completed:
+
+### Cache implementation (spec/007.3-Hist-Caching.md)
+- Wrote spec file with three-tier cache design: T1 page text (24h TTL), T2 extraction (no expiry), T3 Neo4j ingestion guard
+- Created `hist/cache/` package with `__init__.py`
+- Implemented `page_cache.py`: disk-backed JSON per URL slug, 86400s TTL, transparent to callers
+- Implemented `extraction_cache.py`: stores entities + relations together, no expiration
+- Modified `wikipedia.py`: check page cache before Playwright fetch (saves ~5s + throttle)
+- Added `extract_with_cache(url, text)` in `extractor.py`: returns `(entities, relations, from_cache_flag)`, saves ~150-300s LLM calls on hit
+- Rewrote `batch_ingest.py`: uses cached extraction, prints `[CACHED]` / `[SKIP]` tags, checks T3 guard before storage
+- Added `is_url_ingested(url)` in `store_nodes_edges.py`: queries Neo4j for nodes with `_source_url` matching URL
+
+### End-to-end test results
+- Cold run (Lee): 301.7s (page fetch + LLM extraction, T3 hit at storage)
+- Hot run (all 3 tiers cached): **0.5s** — 600x speedup
+- All three cache tiers confirmed working: page text returned instantly, extraction tagged `[CACHED]`, storage skipped with `[SKIP]`
+
+### Graph display fixes
+- Node hit detection radii increased from 14-18px to 35-45px to cover circle + label area below
+- Drag-to-reposition no longer triggers physics (was dragging all neighbors along)
+- Click vs drag disambiguation: mouseup handler distinguishes <6px tap (click/detail panel) from >4px movement (drag/save position)
+- Node positions persisted globally in localStorage, loaded on every graph refresh regardless of search query
+- Physics tuned: increased repulsion (800→1200), added 70px minimum distance floor, reduced attraction (0.8→0.06), increased edge rest length (150→180), nodes initialize in ring instead of random positions

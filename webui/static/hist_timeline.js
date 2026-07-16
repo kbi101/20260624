@@ -15,6 +15,8 @@ let graphNodes = [];  // Computed positions for force simulation
 let simulating = false;
 let simFrameCount = 0;  // Frames run this cycle (cap to auto-stop)
 const MAX_SIM_FRAMES = 500;
+let stableFrames = 0;   // Consecutive frames where max velocity < 0.5
+let draggingGraphNode = null;
 
 function setViewMode(mode) {
   if (mode === viewMode) return;
@@ -37,18 +39,84 @@ const ctx = canvas.getContext("2d");
 
 /* ── Load data & render ───────────────────────────────────────────── */
 
-async function loadGraph() {
+let currentGraphQuery = null;
+
+async function loadGraph(query, hops, limit) {
   try {
-    const r = await fetch("/api/hist/graph-data");
+    const params = new URLSearchParams();
+    if (query) { params.set("query", query); currentGraphQuery = query; }
+    if (hops) params.set("hops", hops);
+    if (limit) params.set("limit", limit);
+    const url = `/api/hist/graph-data${params.toString() ? '?' + params.toString() : ''}`;
+    const r = await fetch(url);
     const d = await r.json();
     G.events = d.events || [];
     G.persons = d.persons || [];
     G.edges = d.edges || [];
+
+    // Reset graph view state on reload
+    graphNodes = [];
+    simulating = false;
+
     updateStatsBadge();
     renderTimeline();
     buildPersonChips();
   } catch (e) {
     console.error("Failed to load graph:", e);
+  }
+}
+
+async function searchGraphSub() {
+  const q = document.getElementById("graphSearchInput").value.trim();
+  if (!q) return;
+  graphNodes = [];
+  simulating = false;
+  await loadGraph(q, 1, 80);
+}
+
+async function expandNodeNeighbours(targetId) {
+  try {
+    const r = await fetch(`/api/hist/expand-node/${encodeURIComponent(targetId)}/?hops=1`);
+    const data = await r.json();
+    if (!data.neighbours?.length) return;
+
+    const existingIds = new Set([
+      ...G.events.map(e => e.node_id),
+      ...G.persons.map(p => p.node_id),
+    ]);
+
+    // Merge neighbours (skip already-present nodes)
+    data.neighbours.forEach(nb => {
+      if (existingIds.has(nb.node_id)) return;
+      existingIds.add(nb.node_id);
+
+      if (nb.label === "Event") {
+        G.events.push({ node_id: nb.node_id, name: nb.name || nb.node_id, date: "", year: null });
+      } else {
+        G.persons.push({ node_id: nb.node_id, name: nb.name || nb.node_id });
+      }
+    });
+
+    // Merge new edges (skip duplicates)
+    const existingEdges = new Set(G.edges.map(e => `${e.src}||${e.rel}||${e.tgt}`));
+    data.edges.forEach(ed => {
+      const key = `${ed.src}||${ed.rel}||${ed.tgt}`;
+      if (!existingEdges.has(key)) {
+        G.edges.push({ src: ed.src, rel: ed.rel, tgt: ed.tgt });
+        existingEdges.add(key);
+      }
+    });
+
+    // Rebuild graph view, re-simulate from scratch
+    stableFrames = 0;
+    initGraphPositions();
+    simulating = true;
+    runGraphSimulation();
+
+    updateStatsBadge();
+    buildPersonChips();
+  } catch (e) {
+    console.error("Expand failed:", e);
   }
 }
 
@@ -68,7 +136,7 @@ async function doIngest() {
     const r = await fetch("/api/hist/ingest", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({topic}) });
     const d = await r.json();
     console.log("Ingested:", d);
-    loadGraph();
+    loadGraph(currentGraphQuery);
   } catch (e) { console.error("Ingest failed:", e); }
 }
 
@@ -77,7 +145,7 @@ async function doIngestAll() {
     const r = await fetch("/api/hist/ingest-queue", { method: "POST" });
     const d = await r.json();
     console.log("Queue done:", d);
-    loadGraph();
+    loadGraph(currentGraphQuery);
   } catch (e) { console.error(e); }
 }
 
@@ -364,56 +432,46 @@ function renderTimeline() {
 /* ── Graph View Renderer (force-directed) ───────────────────────── */
 
 function initGraphPositions() {
-  // Initialize positions for all nodes
   graphNodes = [];
   const W = canvas.width / devicePixelRatio;
   const H = canvas.height / devicePixelRatio;
-  
-  // Add events
-  G.events.forEach(e => {
+  const cx = W / 2;
+  const cy = H / 2;
+  const ringRadius = Math.min(W, H) * 0.35;
+
+  const allItems = [
+    ...G.events.map(e => ({ node_id: e.node_id, name: e.name || e.node_id, type: "event", year: e.year || 0, mass: 2 })),
+    ...G.persons.map(p => ({ node_id: p.node_id, name: p.name || p.node_id, type: "person", mass: 1.5 }))
+  ];
+
+  const cache = loadNodePositions();
+
+  allItems.forEach((item, i) => {
+    const angle = (2 * Math.PI * i) / allItems.length;
+    const restored = cache ? cache[item.node_id] : null;
     graphNodes.push({
-      node_id: e.node_id,
-      name: e.name || e.node_id,
-      type: "event",
-      year: e.year || 0,
-      x: Math.random() * W,
-      y: Math.random() * H,
-      vx: 0, vy: 0,
-      mass: 2
-    });
-  });
-  
-  // Add persons
-  G.persons.forEach(p => {
-    graphNodes.push({
-      node_id: p.node_id,
-      name: p.name || p.node_id,
-      type: "person",
-      x: Math.random() * W,
-      y: Math.random() * H,
-      vx: 0, vy: 0,
-      mass: 1.5
+      ...item,
+      x: restored ? restored.x : cx + ringRadius * Math.cos(angle),
+      y: restored ? restored.y : cy + ringRadius * Math.sin(angle),
+      vx: 0, vy: 0
     });
   });
 }
 
-function runGraphSimulation() {
-  if (!simulating) return;
-  
+function simulateGraphStep() {
   const W = canvas.width / devicePixelRatio;
   const H = canvas.height / devicePixelRatio;
   const center = { x: W / 2, y: H / 2 };
-  
-  // Force parameters
-  const repelStrength = 800;
-  const attractStrength = 0.8;
+
+  const repelStrength = 1200;
+  const attractStrength = 0.06;
   const damping = 0.85;
   const maxDisplacement = 50;
-  
-  // Build edge lookups
+  const minDist = 70;
+
   const nodeIndex = new Map(graphNodes.map(n => [n.node_id, n]));
-  
-  // Apply repulsion between all node pairs
+
+  // Apply repulsion between all node pairs (with minimum distance floor)
   for (let i = 0; i < graphNodes.length; i++) {
     for (let j = i + 1; j < graphNodes.length; j++) {
       const a = graphNodes[i];
@@ -421,70 +479,89 @@ function runGraphSimulation() {
       const dx = a.x - b.x;
       const dy = a.y - b.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = repelStrength / (dist * dist);
-      const fx = (dx / dist) * force;
-      const fy = (dy / dist) * force;
-      
-      a.vx -= fx * b.mass;
-      a.vy -= fy * b.mass;
-      b.vx += fx * a.mass;
-      b.vy += fy * a.mass;
+
+      // Stronger repulsion below minDist to prevent overlap
+      if (dist < minDist) {
+        const push = (minDist - dist) * 0.5;
+        a.vx += (dx / dist) * push;
+        a.vy += (dy / dist) * push;
+        b.vx -= (dx / dist) * push;
+        b.vy -= (dy / dist) * push;
+      } else {
+        const force = repelStrength / (dist * dist);
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        a.vx -= fx * b.mass;
+        a.vy -= fy * b.mass;
+        b.vx += fx * a.mass;
+        b.vy += fy * a.mass;
+      }
     }
   }
-  
+
   // Apply attraction along edges
   G.edges.forEach(edge => {
     const a = nodeIndex.get(edge.src);
     const b = nodeIndex.get(edge.tgt);
     if (!a || !b) return;
-    
+
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
+
     if (dist > 0) {
-      const force = (dist - 150) * attractStrength;
+      const force = (dist - 180) * attractStrength;
       const fx = (dx / dist) * force;
       const fy = (dy / dist) * force;
-      
+
       a.vx += fx;
       a.vy += fy;
       b.vx -= fx;
       b.vy -= fy;
     }
   });
-  
-  // Center gravitation
+
+  // Center gravitation + integrate
   graphNodes.forEach(node => {
     const dx = center.x - node.x;
     const dy = center.y - node.y;
-    const force = 0.1;
-    node.vx += dx * force;
-    node.vy += dy * force;
-    
-    // Apply damping
+    node.vx += dx * 0.1;
+    node.vy += dy * 0.1;
+
     node.vx *= damping;
     node.vy *= damping;
-    
-    // Apply velocity (capped)
+
     const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
     if (speed > 0) {
       const cap = Math.min(speed, maxDisplacement);
       node.x += (node.vx / speed) * cap;
       node.y += (node.vy / speed) * cap;
     }
-    
-    // Keep in bounds
+
     node.x = Math.max(20, Math.min(W - 20, node.x));
     node.y = Math.max(20, Math.min(H - 20, node.y));
   });
-  
-  simFrameCount++;
-  if (simFrameCount > MAX_SIM_FRAMES) {
-    simulating = false;
-  } else {
-    requestAnimationFrame(runGraphSimulation);
+}
+
+function runGraphSimulation() {
+  // Pre-compute all steps synchronously so the user never sees nodes jiggle
+  for (let i = 0; i < MAX_SIM_FRAMES; i++) {
+    simulateGraphStep();
+
+    let maxSpeed = 0;
+    graphNodes.forEach(n => {
+      const spd = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+      if (spd > maxSpeed) maxSpeed = spd;
+    });
+
+    if (maxSpeed < 0.5) {
+      stableFrames++;
+      if (stableFrames >= 50) break;
+    } else {
+      stableFrames = 0;
+    }
   }
+  simulating = false;
   renderGraphView();
 }
 
@@ -530,7 +607,7 @@ function renderGraphView() {
     }
   });
 
-  // Draw nodes — larger radius, labels always visible
+  // Draw nodes — circles with labels below for clarity
   graphNodes.forEach(node => {
     const isSelected = selectedNode === node.node_id;
     const isHovered = highlightNode === node.node_id;
@@ -539,7 +616,7 @@ function renderGraphView() {
 
     ctx.globalAlpha = alpha;
 
-    // Node body — bigger dots
+    // Node body
     const radius = isSelected ? 28 : (isHovered || isNeighbor ? 24 : 20);
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
@@ -552,15 +629,16 @@ function renderGraphView() {
       ctx.stroke();
     }
 
-    // Label always shown
-    ctx.globalAlpha = alpha > 0.7 ? 1 : 0.8;
-    ctx.fillStyle = isSelected ? "#fff" : (isHovered || isNeighbor ? "#dfe6e9" : "rgba(255,255,255,.7)");
-    ctx.font = `bold ${isSelected || isHovered ? 12 : 10}px Inter`;
+    // Label below circle
+    ctx.globalAlpha = alpha > 0.7 ? 1 : 0.6;
+    ctx.fillStyle = isSelected ? "#fff" : (isHovered || isNeighbor ? "#dfe6e9" : "rgba(255,255,255,.65)");
+    ctx.font = `${isSelected || isHovered ? 'bold ' : ''}${10}px Inter`;
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const maxChars = Math.floor((radius * 2.4) / 6);
+    ctx.textBaseline = "top";
+
+    const maxChars = 24;
     const clamped = node.name.length > maxChars ? node.name.slice(0, maxChars - 1) + "…" : node.name;
-    ctx.fillText(clamped, node.x, node.y);
+    ctx.fillText(clamped, node.x, node.y + radius + 6);
   });
 
   ctx.globalAlpha = 1;
@@ -599,7 +677,73 @@ function fillRoundRect(c, x, y, w, h, r) {
   c.closePath();
 }
 
-/* ── Mouse interaction ─────────────────────────────────────────── */
+ /* ── Mouse interaction ─────────────────────────────────────────── */
+
+let isPanning = false;
+let dragStartPos = null;
+let didDrag = false;
+
+// ── localStorage persistence for node positions ────────────────────
+function saveNodePositions() {
+  const map = {};
+  graphNodes.forEach(n => { map[n.node_id] = { x: n.x, y: n.y }; });
+  try { localStorage.setItem("hist_graph_positions", JSON.stringify(map)); } catch(_e) {}
+}
+
+function loadNodePositions() {
+  try {
+    const raw = localStorage.getItem("hist_graph_positions");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(_e) {}
+  return null;
+}
+
+canvas.addEventListener("mousedown", e => {
+  if (e.button !== 0) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (viewMode === "graph") {
+    for (const nd of graphNodes) {
+      const dx = mx - nd.x;
+      const dy = my - nd.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 45) {
+        dragStartPos = { x: mx, y: my };
+        draggingGraphNode = nd;
+        didDrag = false;
+        return;
+      }
+    }
+    isPanning = true;
+    dragStartPos = { x: mx, y: my };
+    didDrag = false;
+    return;
+  }
+
+  // Timeline mode — no change on mousedown in timeline mode
+});
+
+canvas.addEventListener("mouseup", e => {
+  if (draggingGraphNode) {
+    // Only treat as a click if mouse barely moved
+    if (!didDrag && dragStartPos) {
+      const dx = e.clientX - dragStartPos.x;
+      const dy = e.clientY - dragStartPos.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 6) {
+        loadNodeDetail(draggingGraphNode.node_id);
+      }
+    } else if (didDrag) {
+      saveNodePositions();
+    }
+    draggingGraphNode = null;
+    dragStartPos = null;
+    didDrag = false;
+    return;
+  }
+  isPanning = false;
+});
 
 canvas.addEventListener("mousemove", e => {
   const rect = canvas.getBoundingClientRect();
@@ -607,19 +751,49 @@ canvas.addEventListener("mousemove", e => {
   const my = e.clientY - rect.top;
 
   if (viewMode === "graph") {
-    // Quick hit-test against nearby nodes only
+    if (draggingGraphNode) {
+      if (dragStartPos) {
+        const dx = mx - dragStartPos.x;
+        const dy = my - dragStartPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 4) didDrag = true;
+      }
+      draggingGraphNode.x = mx;
+      draggingGraphNode.y = my;
+      renderGraphView();
+      return;
+    }
+
+    // Hover highlight
     let hit = null;
     for (const nd of graphNodes) {
       const dx = mx - nd.x;
       const dy = my - nd.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 16) { hit = nd; break; }
+      if (Math.sqrt(dx * dx + dy * dy) < 35) { hit = nd; break; }
     }
     highlightNode = hit ? hit.node_id : null;
+
+    // Pan background
+    if (isPanning) {
+      graphNodes.forEach(n => {
+        n.x += e.movementX;
+        n.y += e.movementY;
+      });
+      renderGraphView();
+      return;
+    }
+
+    renderGraphView();
+    return;
+  }
+
+  // Timeline mode — pan
+  if (isPanning) {
+    timelineOffsetX += e.movementX;
     renderTimeline();
     return;
   }
 
-  // Timeline mode only
+  // Timeline mode — hover
   const years = G.events.map(ev => ev.year).filter(y => y != null && y > 1400);
   if (!years.length) return;
 
@@ -630,36 +804,25 @@ canvas.addEventListener("mousemove", e => {
   const usableW = rect.width - padX * 2;
   const tlY = rect.height * TIMELINE_Y_RATIO;
 
-  let hit = null;
+  let hitEv = null;
   G.events.forEach(ev => {
     if (!ev.year || ev.year < minY || ev.year > maxY) return;
     const x = (padX + ((ev.year - minY) / span) * usableW * timelineZoom) - timelineOffsetX;
-    if (Math.abs(mx - x) < 30 && Math.abs(my - tlY) < 40) hit = ev;
+    if (Math.abs(mx - x) < 30 && Math.abs(my - tlY) < 40) hitEv = ev;
   });
 
-  highlightNode = hit ? hit.node_id : null;
+  highlightNode = hitEv ? hitEv.node_id : null;
   renderTimeline();
 });
 
 canvas.addEventListener("click", e => {
+  // Graph clicks now handled in mouseup (distinguishes drag from tap).
+  if (viewMode === "graph") return;
+
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  if (viewMode === "graph") {
-    // Hit test graph nodes
-    for (const node of graphNodes) {
-      const dx = mx - node.x;
-      const dy = my - node.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 14) {
-        loadNodeDetail(node.node_id);
-        return;
-      }
-    }
-    return;
-  }
-
-  // Timeline mode click logic
   const years = G.events.map(ev => ev.year).filter(y => y != null && y > 1400);
   if (!years.length) return;
 
@@ -679,6 +842,23 @@ canvas.addEventListener("click", e => {
   });
 });
 
+canvas.addEventListener("dblclick", e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (viewMode === "graph") {
+    for (const node of graphNodes) {
+      const dx = mx - node.x;
+      const dy = my - node.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 18) {
+        expandNodeNeighbours(node.node_id);
+        return;
+      }
+    }
+  }
+});
+
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
   const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -686,15 +866,6 @@ canvas.addEventListener("wheel", e => {
   renderTimeline();
   document.getElementById("askStats").textContent = `zoom ${(timelineZoom * 100).toFixed(0)}%`;
 }, { passive: false });
-
-let isDragging = false;
-canvas.addEventListener("mousedown", e => { if (e.button === 0) isDragging = true; });
-canvas.addEventListener("mouseup", () => { isDragging = false; });
-canvas.addEventListener("mousemove", e => {
-  if (!isDragging) return;
-  timelineOffsetX += e.movementX;
-  renderTimeline();
-});
 
 /* ── Init ─────────────────────────────────────────────────────────── */
 

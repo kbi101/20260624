@@ -1,11 +1,12 @@
-"""Wikipedia page fetcher via Morphos web_fetch tool. Adds per-request throttle for crawl compliance."""
+"""Wikipedia page fetcher via Morphos WebFetch tool with page cache."""
 
 import time
-
 from morphos.tools.web_fetch import WebFetch
+from hist.cache.page_cache import PageCache
 
 _REQUEST_DELAY = 3.0
 _last_ts = [0.0]
+_page_cache = PageCache()
 
 
 def _throttle():
@@ -16,10 +17,12 @@ def _throttle():
 
 
 def fetch_full_page(url, timeout=15):
-    """Fetch full Wikipedia article page using local Playwright browser. Returns all paragraph text."""
+    """Fetch full Wikipedia article page. Returns cleaned text (uses cache when fresh)."""
+    cached = _page_cache.get(url)
+    if cached is not None:
+        return cached[:12000]
+
     _throttle()
     fetched = WebFetch(timeout=timeout).execute(url)
-    
-    # The tool returns up to 6000 chars by default — that's fine for now since we feed LLM chunks anyway.
-    # If it gets truncated mid-sentence later phases we increase page limits.
-    return fetched
+    _page_cache.put(url, fetched)
+    return fetched[:12000]

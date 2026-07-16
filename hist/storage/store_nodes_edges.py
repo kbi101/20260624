@@ -66,6 +66,15 @@ def count_by_type():
     return {"events": evts[0].get("events", 0), "persons": peeps[0].get("persons", 0)} if evts and peeps else {"events": 0, "persons": 0}
 
 
+def is_url_ingested(url):
+    """Check if nodes from this source URL already exist in Neo4j."""
+    row = run_cypher(
+        "MATCH (n) WHERE n._source_url = $url RETURN count(n) AS cnt",
+        {"url": url}
+    )
+    return bool(row[0].get("cnt", 0))
+
+
 def delete_entity(node_id):
     """Remove an entity by node_id."""
     run_cypher("MATCH (n) WHERE n.node_id = $nid DELETE n", {"nid": node_id})
