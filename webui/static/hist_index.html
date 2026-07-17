@@ -100,7 +100,9 @@
     <!-- Center: timeline + person grid -->
     <section class="timeline-panel" id="centerPanel">
       <div class="timeline-header">
-        <input type="text" id="askInput" placeholder="Ask a question about history…" onkeydown="if(event.key==='Enter')doAsk()">
+        <input type="text" id="graphSearchInput" placeholder="Search subgraph (e.g. Napoleon, 1492)…" onkeydown="if(event.key==='Enter')searchGraphSub()">
+        <button onclick="searchGraphSub()" style="background:var(--accent-3)">🔍 Search</button>
+        <input type="text" id="askInput" placeholder="Ask a question…" onkeydown="if(event.key==='Enter')doAsk()">
         <button onclick="doAsk()">Ask</button>
         <div style="display:flex;gap:4px;margin-left:8px;">
           <button id="btnTimeline" class="filter-btn on" onclick="setViewMode('timeline')">⏱ Timeline</button>

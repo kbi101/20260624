@@ -3,11 +3,75 @@
 Opens a new tab → types query into DDG → hits Enter → extracts results →
 ranks them with learned heuristics so preferred sources surface first."""
 
+import base64
 import re
 import time
+import urllib.parse as urlparse
 
 from morphos.tools.browser import get_page
 from morphos.tools.registry import Tool
+
+
+def _decode_ddg_redirect(href: str) -> str:
+    """Resolve DDG redirect wrapper URLs to the actual target URL.
+
+    DDG organic results link through /l/ with encoded redirect params.
+    Paid ads go through /y.js? with ad provider tracking — those are filtered out caller-side."""
+
+    if not href:
+        return ""
+
+    # Skip DDG's own internal pages and ad redirects
+    if href.startswith(("/y.js", "/t/", "/d/", "/html")):
+        return ""
+    if "duckduckgo.com/y.js" in href or "ad_provider" in href:
+        return ""
+
+    # If it's already a clean external URL, use as-is
+    if href.startswith("http://") or href.startswith("https://"):
+        return href
+
+    # DDG organic redirect format: /l/?uddn=...&udd=https://target-url...
+    if href.startswith("/l/"):
+        parsed = urlparse.urlparse(href.replace("//", "/"))
+        params = urlparse.parse_qs(parsed.query)
+        # Try udd (often base64) then uddn (fallback plain URL)
+        for key in ("udd", "uddn"):
+            val = params.get(key, [None])[0]
+            if not val:
+                continue
+            # Already decoded URL
+            if val.startswith("http"):
+                return val
+            # base64-encoded — fix padding before decoding
+            try:
+                padded = val + "=" * (-len(val) % 4)
+                decoded = base64.b64decode(padded).decode("utf-8")
+                if decoded.startswith("http"):
+                    return decoded
+            except Exception:
+                pass
+        return ""
+
+    # Last resort: extract any http URL from the href string
+    m = re.search(r"https?://[^\s&\"']+|www\.[^\s&\"']+", href)
+    if m:
+        url = m.group(0)
+        if not url.startswith("http"):
+            url = "https://" + url
+        return url
+
+    return ""
+
+
+def _is_ad_article(article_html: str, article_inner: str) -> bool:
+    """Detect and filter out sponsored/ad articles from DDG results."""
+    ad_signals = ["sponsored", "promoted", "ad-", ".ddg_sp"]
+    if any(s.lower() in article_inner.lower() for s in ad_signals):
+        return True
+    if "class=\"\"" in article_html or "data-testid=\"paid" in article_html:
+        return True
+    return False
 
 
 class WebSearch(Tool):
@@ -31,17 +95,29 @@ class WebSearch(Tool):
                 page.fill('input[name="q"]', query)
                 page.keyboard.press("Enter")
 
-            time.sleep(1)
+            time.sleep(2)
 
             results = []
 
-            articles = page.query_selector_all(".results--main article")[:max_results]
+            articles = page.query_selector_all(".results--main article")[:max_results * 3]
             for article in articles:
+                # Skip ad/sponsored content
+                art_html = article.get_attribute("class") or ""
+                try:
+                    art_inner = (article.inner_text() or "").lower()
+                except Exception:
+                    art_inner = ""
+                if _is_ad_article(art_html, art_inner):
+                    continue
+
                 title_el = article.query_selector("h2 a")
                 link_el = article.query_selector("a[href]")
 
                 title = title_el.inner_text() if title_el else ""
-                href = (link_el or title_el).get_attribute("href") if (link_el or title_el) else ""
+                raw_href = (link_el or title_el).get_attribute("href") if (link_el or title_el) else ""
+
+                # Resolve DDG redirect URL to actual target
+                href = _decode_ddg_redirect(raw_href)
 
                 snippet = ""
                 for sel in ["span:not([class])", "p", ".snippet"]:

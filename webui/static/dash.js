@@ -314,65 +314,163 @@ function renderGraph(graphData) {
     }
   }
 
-  // Assign nodes positions via simple force-directed layout (deterministic init)
-  const cx = w / 2; 
+  // Assign nodes positions via hierarchical force-directed layout (mind-map style)
+  const cx = w / 2;
   const cy = h / 2;
-  const radius = Math.min(w, h) * 0.35;
-  
-  const nodeMap = {};
-  nodeList.forEach((n, i) => {
-    const angle = (2 * Math.PI * i / nodeList.length) - Math.PI/2;
-    nodeMap[n] = {
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
-      vx: 0, vy: 0, label: n, name: n,
-    };
+  const radius = Math.min(w, h) * 0.42;
+
+  // Compute node degrees to find root/high-degree hubs
+  const degree = {};
+  nodeList.forEach(n => { degree[n] = 0; });
+  edges.forEach(e => {
+    if (degree[e.from] !== undefined) degree[e.from]++;
+    if (degree[e.to] !== undefined) degree[e.to]++;
   });
 
-  // Run a few force-directed iterations for clean layout
-  for (let iter = 0; iter < 80; iter++) {
-    const alpha = 0.8 / (iter + 1);
+  // Sort nodes by degree descending — hubs first for radial placement
+  const sorted = [...nodeList].sort((a, b) => (degree[b]||0) - (degree[a]||0));
 
-    // Repulsion
-    for (const a of Object.values(nodeMap)) {
-      for (const b of Object.values(nodeMap)) {
-        if (a === b) continue;
-        let dx = a.x - b.x, dy = a.y - b.y;
-        let d2 = dx*dx + dy*dy || 1;
-        let dist = Math.sqrt(d2);
-        let force = 80 / d2;
-        a.vx += (dx/dist)*force*alpha;
-        a.vy += (dy/dist)*force*alpha;
-      }
+  // Identify connected components for grouping
+  const visited = new Set();
+  const components = [];
+  nodeList.forEach(start => {
+    if (visited.has(start)) return;
+    const comp = [];
+    const stack = [start];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      comp.push(cur);
+      edges.forEach(e => {
+        if (e.from === cur && !visited.has(e.to)) stack.push(e.to);
+        if (e.to === cur && !visited.has(e.from)) stack.push(e.from);
+      });
     }
+    components.push(comp);
+  });
 
-    // Attraction along edges
-    for (const e of edges) {
-      const a = nodeMap[e.from], b = nodeMap[e.to];
-      if (!a || !b) continue;
-      let dx = b.x - a.x, dy = b.y - a.y;
-      let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      let force = (dist - 100) * 0.03 * alpha;
-      a.vx += (dx/dist)*force;
-      a.vy += (dy/dist)*force;
-      b.vx -= (dx/dist)*force;
-      b.vy -= (dy/dist)*force;
-    }
+  const nodeMap = {};
+  const componentCenters = {};
+  const numComps = components.length || 1;
 
-    // Center pull
-    for (const n of Object.values(nodeMap)) {
-      n.vx += (cx - n.x) * 0.02 * alpha;
-      n.vy += (cy - n.y) * 0.02 * alpha;
-    }
+  // Place each component at a different sector of the radial layout
+  if (numComps > 1) {
+    components.forEach((comp, ci) => {
+      const compAngle = (2 * Math.PI * ci / numComps) - Math.PI / 2;
+      const compCx = cx + radius * 0.5 * Math.cos(compAngle);
+      const compCy = cy + radius * 0.5 * Math.sin(compAngle);
+      componentCenters[comp[0]] = { x: compCx, y: compCy };
 
-    // Apply velocities
-    for (const n of Object.values(nodeMap)) {
-      n.x += Math.max(-5, Math.min(5, n.vx));
-      n.y += Math.max(-5, Math.min(5, n.vy));
-      n.x = Math.max(40, Math.min(w - 40, n.x));
-      n.y = Math.max(40, Math.min(h - 40, n.y));
+      // Within each component, sort by degree and place radially
+      const compSorted = [...comp].sort((a, b) => (degree[b]||0) - (degree[a]||0));
+      compSorted.forEach((n, i) => {
+        const innerR = i === 0 ? 0 : 50 + (i / compSorted.length) * radius * 0.4;
+        const a = (2 * Math.PI * i / Math.max(compSorted.length, 1));
+        nodeMap[n] = {
+          x: compCx + innerR * Math.cos(a),
+          y: compCy + innerR * Math.sin(a),
+          vx: 0, vy: 0, label: n, name: n,
+        };
+      });
+    });
+  } else {
+    // Single component — root at center, children radiate outward
+    const hub = sorted[0] || nodeList[0];
+    nodeMap[hub] = { x: cx, y: cy, vx: 0, vy: 0, label: hub, name: hub };
+    for (let i = 1; i < sorted.length; i++) {
+      const angle = (2 * Math.PI * i / (sorted.length - 1)) - Math.PI / 2;
+      const r = radius * (0.3 + 0.7 * (i / sorted.length));
+      nodeMap[sorted[i]] = {
+        x: cx + r * Math.cos(angle),
+        y: cy + r * Math.sin(angle),
+        vx: 0, vy: 0, label: sorted[i], name: sorted[i],
+      };
     }
   }
+
+  // Ensure all nodes are in the map (handles isolated ones)
+  Object.keys(nodeMap).forEach(n => { if (!nodeList.includes(n)) delete nodeMap[n]; });
+  nodeList.forEach(n => {
+    if (!nodeMap[n]) {
+      const angle = Math.random() * Math.PI * 2;
+      nodeMap[n] = { x: cx + radius * 0.5 * Math.cos(angle), y: cy + radius * 0.5 * Math.sin(angle), vx: 0, vy: 0, label: n, name: n };
+    }
+  });
+
+  let totalIterations = 0;
+  const maxIterations = 800;
+  const nodeCount = nodeList.length;
+  const idealDist = Math.min(w, h) / (Math.sqrt(nodeCount) + 2);
+
+  function runForceLayout(batchSize) {
+    for (let iter = 0; iter < batchSize; iter++) {
+      if (totalIterations >= maxIterations) break;
+      const alpha = 1.0 - totalIterations / maxIterations;
+      const repBase = idealDist * idealDist * 2.5;
+      const springLen = idealDist * 1.8;
+
+      // Stronger repulsion to prevent clustering
+      for (const a of Object.values(nodeMap)) {
+        for (const b of Object.values(nodeMap)) {
+          if (a === b) continue;
+          let dx = a.x - b.x || 0.01, dy = a.y - b.y || 0.01;
+          let d2 = dx*dx + dy*dy;
+          let dist = Math.sqrt(d2);
+          // Min distance floor to prevent infinite forces
+          let effectiveD2 = Math.max(d2, 50 * 50);
+          let force = repBase / effectiveD2;
+          a.vx += (dx/dist)*force*alpha;
+          a.vy += (dy/dist)*force*alpha;
+        }
+      }
+
+      // Spring attraction along edges
+      for (const e of edges) {
+        const a = nodeMap[e.from], b = nodeMap[e.to];
+        if (!a || !b) continue;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+        let force = (dist - springLen) * 0.04 * alpha;
+        a.vx += (dx/dist)*force;
+        a.vy += (dy/dist)*force;
+        b.vx -= (dx/dist)*force;
+        b.vy -= (dy/dist)*force;
+      }
+
+      // Weak center gravity — just to keep nodes on canvas, not clustered
+      for (const n of Object.values(nodeMap)) {
+        const distToCenter = Math.sqrt((n.x-cx)**2 + (n.y-cy)**2);
+        const canvasR = Math.min(w, h) * 0.45;
+        if (distToCenter > canvasR) {
+          n.vx += (cx - n.x) * 0.03;
+          n.vy += (cy - n.y) * 0.03;
+        }
+      }
+
+      // Integrate with moderate damping
+      for (const n of Object.values(nodeMap)) {
+        n.vx *= 0.6;
+        n.vy *= 0.6;
+        n.x += Math.max(-40, Math.min(40, n.vx));
+        n.y += Math.max(-40, Math.min(40, n.vy));
+        // Keep within canvas bounds
+        n.x = Math.max(60, Math.min(w - 60, n.x));
+        n.y = Math.max(80, Math.min(h - 80, n.y));
+      }
+
+      totalIterations++;
+    }
+
+    if (totalIterations < maxIterations) {
+      runForceLayout(batchSize);
+    } else {
+      for (const n of Object.values(nodeMap)) { n.vx = 0; n.vy = 0; }
+    }
+  }
+
+  // Run initial burst fast, then settle
+  runForceLayout(300);
 
   // Edge type → color mapping
   const edgeColors = {

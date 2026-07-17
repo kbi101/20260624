@@ -246,20 +246,70 @@ def ask(query):
     return fallback or None
 
 
-def get_graph_data():
-    """Return all nodes and edges for the timeline frontend."""
+def get_graph_data(query=None, hop_depth=1, max_nodes=80):
+    """Return a subgraph for the timeline frontend.
+
+    If query is given, seed on matching nodes and expand hop_depth hops.
+    If query is None, return the last `max_nodes // 2` events by date.
+    Caps total returned nodes to max_nodes so the browser never chokes.
+    """
+
+    if query:
+        # Step 1 — find seed nodes matching the query
+        seeds = run_cypher(
+            "MATCH (n) WHERE toLower(n.name) CONTAINS toLower($q) "
+            "RETURN n.node_id AS node_id, labels(n)[0] AS label "
+            f"LIMIT {max_nodes // 3}",
+            {"q": query},
+        )
+        if not seeds:
+            return {"events": [], "persons": [], "edges": []}
+
+        seed_ids = [r["node_id"] for r in seeds]
+
+        # Step 2 — expand hop_depth hops from seeds (use literal depth)
+        all_nodes_cur = run_cypher(
+            f"UNWIND $ids AS sid MATCH (start {{node_id: sid}}) "
+            f"MATCH path = (start)-[*0..{int(hop_depth)}]-(neighbour) "
+            f"RETURN DISTINCT neighbour.node_id AS node_id, "
+            f"       labels(neighbour)[0] AS label",
+            {"ids": seed_ids},
+        )
+
+        expanded_ids = [r["node_id"] for r in all_nodes_cur][:max_nodes]
+    else:
+        # Default: most recent events
+        recent = run_cypher(
+            "MATCH (e:Event) WHERE e.date IS NOT NULL "
+            "RETURN e.node_id AS node_id, labels(e)[0] AS label "
+            "ORDER BY e.date DESC LIMIT $limit",
+            {"limit": max_nodes // 2},
+        )
+        expanded_ids = [r["node_id"] for r in recent]
+
+    if not expanded_ids:
+        return {"events": [], "persons": [], "edges": []}
+
+    # Step 3 — fetch properties for the selected nodes
     events_cur = run_cypher(
-        "MATCH (e:Event) RETURN e.node_id AS node_id, e.name AS name, "
-        "e.date AS date, e._source_url AS source_url"
+        "UNWIND $ids AS nid MATCH (e:Event {node_id: nid}) "
+        "RETURN e.node_id AS node_id, e.name AS name, "
+        "e.date AS date, e._source_url AS source_url",
+        {"ids": expanded_ids},
     )
 
     persons_cur = run_cypher(
-        "MATCH (p:Person) RETURN p.node_id AS node_id, p.name AS name, "
-        "p._source_url AS source_url"
+        "UNWIND $ids AS nid MATCH (p:Person {node_id: nid}) "
+        "RETURN p.node_id AS node_id, p.name AS name, "
+        "p._source_url AS source_url",
+        {"ids": expanded_ids},
     )
 
+    # Step 4 — edges only between selected nodes
     edges_cur = run_cypher(
-        "MATCH (a)-[r]->(b) RETURN a.node_id AS src, type(r) AS rel, b.node_id AS tgt LIMIT 500"
+        "MATCH (a)-[r]->(b) WHERE a.node_id IN $ids AND b.node_id IN $ids "
+        "RETURN a.node_id AS src, type(r) AS rel, b.node_id AS tgt",
+        {"ids": expanded_ids},
     )
 
     ev_list = []

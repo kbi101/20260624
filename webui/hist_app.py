@@ -22,10 +22,10 @@ class SeedRequest(BaseModel):
 
 
 @router.get("/graph-data")
-async def get_graph_data():
-    """Return all nodes and edges for the timeline."""
+async def get_graph_data(query: str = None, hops: int = 1, limit: int = 80):
+    """Return a subgraph — optional search query, hop depth, and node cap."""
     from hist.query_engine import get_graph_data as _get_gd
-    data = await asyncio.to_thread(_get_gd)
+    data = await asyncio.to_thread(_get_gd, query=query, hop_depth=hops, max_nodes=limit)
     return JSONResponse(content=data)
 
 
@@ -92,6 +92,36 @@ async def get_stats():
     from hist.orchestrator import graph_stats
     data = await asyncio.to_thread(graph_stats)
     return JSONResponse(content=data)
+
+
+@router.get("/expand-node/<node_id>/")
+async def expand_node(node_id: str, hops: int = 1):
+    """Return the expanded neighbourhood of a clicked node."""
+    from hist.neo4j_driver.connect import run_cypher
+
+    # Consume the result list from run_cypher before reusing IDs
+    neighbours_raw = [rec for rec in run_cypher(
+        f"MATCH path = (n {{node_id: $id}})-[*1..{int(hops)}]-(neighbour) "
+        "RETURN DISTINCT neighbour.node_id AS node_id, neighbour.name AS name, labels(neighbour)[0] AS label",
+        {"id": node_id},
+    )]
+
+
+    neigh_ids = [dict(r)["node_id"] for r in neighbours_raw]
+
+    edges_raw = [rec for rec in run_cypher(
+        "MATCH (a)-[r]->(b) WHERE "
+        "(a.node_id = $id AND b.node_id IN $neighs) OR "
+        "(b.node_id = $id AND a.node_id IN $neighs) "
+        "RETURN a.node_id AS src, type(r) AS rel, b.node_id AS tgt",
+        {"id": node_id, "neighs": neigh_ids},
+    )]
+
+    return JSONResponse(content={
+        "seed_id": node_id,
+        "neighbours": neighbours_raw,
+        "edges": edges_raw,
+    })
 
 
 @router.get("/")

@@ -316,3 +316,27 @@ Also fixed `__init__.py` that had been written with literal text instead of bein
 - Click vs drag disambiguation: mouseup handler distinguishes <6px tap (click/detail panel) from >4px movement (drag/save position)
 - Node positions persisted globally in localStorage, loaded on every graph refresh regardless of search query
 - Physics tuned: increased repulsion (800→1200), added 70px minimum distance floor, reduced attraction (0.8→0.06), increased edge rest length (150→180), nodes initialize in ring instead of random positions
+
+## 2026-07-16T14:30:00-07:00 — UCT Knowledge Graph Mind Map Layout Fix
+
+**Q:** The knowledge graph nodes in the UCT dashboard are clustered at the center and overlapped. Need it to look like a proper mind map / knowledge graph layout.
+
+**A:** Rewrote the force-directed layout engine in `webui/static/dash.js:317-409`. Key changes:
+- Added hierarchical initialization: compute node degrees, find connected components, place hubs near center with children radiating outward at different sectors per component
+- Much stronger repulsion force: uses `idealDist² × 2.5` as base instead of fixed `60/d²` — scales to node count and canvas size
+- Weaker spring attraction: `(dist - idealDist×1.8) × 0.04` with longer rest length (was 120)
+- Center gravity only activates when nodes drift outside canvas bounds (was always pulling inward at 0.15 strength)
+- Damping reduced from 0.35 to 0.6, velocity clamped at ±40 (was ±20), max iterations increased to 800
+- Ideal spacing computed from canvas size and √(node count) so graphs auto-scale regardless of node density
+
+## 2026-07-16T15:00:00-07:00 — Web Fetch Failures Fix (DDG Redirect URLs)
+
+**Q:** All 3 web fetches failed for "Enterprise Architect toolings" search. URLs were DDG ad-tracking redirects (`duckduckgo.com/y.js?ad_domain=...`). Also Gartner blocked.
+
+**A:** Root cause: `web_search.py` returned raw DDG hrefs which are redirect wrappers (`/l/?udd=base64url...`) and ad tracking links (`/y.js?ad_domain=...`), not actual target URLs. When `web_fetch` navigated them, they failed.
+
+Two functions added to `morphos/tools/web_search.py`:
+- `_decode_ddg_redirect()`: Resolves `/l/` wrapper URLs by extracting `udd` (base64, with padding fix) or `uddn` params → real URL. Hard-filters `/y.js`, `/t/`, `ad_provider` patterns to `""`. Falls back to regex extraction for stray URLs.
+- `_is_ad_article()`: Skips articles containing "sponsored", "promoted", "ad-", `.ddg_sp` markers so ad content never leaks into results.
+
+Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads redirects, and takes first 8 clean hits. Base64 padding is auto-fixed for truncated b64 payloads.
