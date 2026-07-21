@@ -1,5 +1,6 @@
 """Cypher query engine — hand-written templates with LLM fallback for HIST graph."""
 
+import difflib
 import re
 from ollama import Client as OllamaClient
 from hist.neo4j_driver.connect import run_cypher, run_cypher_single
@@ -246,7 +247,7 @@ def ask(query):
     return fallback or None
 
 
-def get_graph_data(query=None, hop_depth=1, max_nodes=80):
+def get_graph_data(query=None, hop_depth=1, max_nodes=250):
     """Return a subgraph for the timeline frontend.
 
     If query is given, seed on matching nodes and expand hop_depth hops.
@@ -255,13 +256,37 @@ def get_graph_data(query=None, hop_depth=1, max_nodes=80):
     """
 
     if query:
-        # Step 1 — find seed nodes matching the query
+        # Step 1 — find seed nodes matching the query (exact substring first)
         seeds = run_cypher(
-            "MATCH (n) WHERE toLower(n.name) CONTAINS toLower($q) "
+            "MATCH (n) WHERE toLower(n.name) CONTAINS toLower($q) OR toLower(n.node_id) CONTAINS toLower($q) "
             "RETURN n.node_id AS node_id, labels(n)[0] AS label "
             f"LIMIT {max_nodes // 3}",
             {"q": query},
         )
+
+        # Fallback 1: tokenize query for typos / partial word matches
+        if not seeds:
+            words = [w.lower() for w in re.findall(r"\w+", str(query)) if len(w) > 2 and w.lower() not in ("the", "to", "for", "and")]
+            if words:
+                conds = " OR ".join([f"toLower(n.name) CONTAINS '{w}' OR toLower(n.node_id) CONTAINS '{w}'" for w in words])
+                seeds = run_cypher(
+                    f"MATCH (n) WHERE {conds} RETURN n.node_id AS node_id, labels(n)[0] AS label LIMIT {max_nodes // 3}"
+                )
+
+        # Fallback 2: difflib fuzzy string similarity for typos (e.g. "Match to the See" -> "March to the Sea")
+        if not seeds:
+            all_nodes_cur = run_cypher("MATCH (n) RETURN n.node_id AS node_id, n.name AS name, labels(n)[0] AS label")
+            matched_nodes = []
+            q_clean = str(query).lower().strip()
+            for n in all_nodes_cur:
+                name_str = (n.get("name") or n["node_id"]).lower()
+                r1 = difflib.SequenceMatcher(None, q_clean, name_str).ratio()
+                r2 = difflib.SequenceMatcher(None, q_clean, n["node_id"].lower()).ratio()
+                if max(r1, r2) >= 0.55:
+                    matched_nodes.append((max(r1, r2), n))
+            matched_nodes.sort(key=lambda x: x[0], reverse=True)
+            seeds = [m[1] for m in matched_nodes[:max_nodes // 3]]
+
         if not seeds:
             return {"nodes": [], "events": [], "persons": [], "edges": []}
 

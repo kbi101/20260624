@@ -448,3 +448,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** Excellent.
 
 **A:** User approved all updates. Work for Phase 008 is complete.
+
+## 2026-07-21T15:18:15-05:00 — Interactive Graph Pan, Drag & Center Controls Fix
+
+**Q:** HIST Interactive Knowledge Graph cannot move and center the graph.
+
+**A:** Added complete canvas mouse & wheel event listeners to `ForceGraphView.tsx`: background click-and-drag canvas panning, individual node pinning & physics dragging, mouse wheel zooming, and a dedicated **Center & Fit Graph** (`Maximize2` button) that calculates the node bounding box and centers all nodes inside the viewport. Rebuilt frontend (`npm run build`), committed (`1104e55`), and pushed to `origin/main`.
