@@ -436,3 +436,15 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** Now its better!
 
 **A:** User confirmed satisfaction with the React Motion UI, D3 force graph visualizer, topic history drawer, Neo4j integration, and updated README screenshots. All Phase 008 goals complete and pushed.
+
+## 2026-07-21T15:07:52-05:00 — Loaded Topic Textbook Dashboard Screenshots
+
+**Q:** UCT dashboard is still not loaded with drawer selection, need that screenshot to show the textbook structure.
+
+**A:** Debugged Playwright click locator for History drawer topic items (`div.cursor-pointer h3`). Clicked cached topic *TCP Congestion Control*, waited for full dashboard render (`h2.text-2xl`), and captured `screenshots/react_motion_uct_dashboard.png` (461 KB) and full-page scroll `screenshots/react_motion_uct_dashboard_full.png` showing all cognitive textbook panels. Updated `README.md`, committed (`f6a77e0`), and pushed to `origin/main`.
+
+## 2026-07-21T15:12:37-05:00 — Final User Confirmation
+
+**Q:** Excellent.
+
+**A:** User approved all updates. Work for Phase 008 is complete.

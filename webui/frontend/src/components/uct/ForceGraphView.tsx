@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as d3 from 'd3-force';
-import { Network, ZoomIn, ZoomOut, RefreshCw, X, ChevronRight } from 'lucide-react';
+import { Network, ZoomIn, ZoomOut, RefreshCw, X, ChevronRight, Maximize2 } from 'lucide-react';
 import type { GraphAdjacency, Edge, HistNode, HistEdge } from '../../types';
 
 interface ForceGraphViewProps {
@@ -31,9 +31,17 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
   selectedNodeId,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [internalSelectedNode, setInternalSelectedNode] = useState<string | null>(null);
   const [zoom, setZoom] = useState<number>(1);
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Refs for tracking simulation & interactive drag states without re-triggering full effect on tick
+  const simulationRef = useRef<d3.Simulation<NodeItem, LinkItem> | null>(null);
+  const nodesRef = useRef<NodeItem[]>([]);
+  const isDraggingCanvasRef = useRef<boolean>(false);
+  const draggedNodeRef = useRef<NodeItem | null>(null);
+  const lastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const activeSelectedNode = selectedNodeId !== undefined ? selectedNodeId : internalSelectedNode;
 
@@ -71,7 +79,49 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
 
   const nodeList = Array.from(nodesMap.entries()).map(([id, name]) => ({ id, name }));
 
-  if (nodeList.length === 0) return null;
+  // Center & auto-fit all nodes within the canvas
+  const handleCenterGraph = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || nodesRef.current.length === 0) {
+      setZoom(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodesRef.current.forEach((n) => {
+      if (n.x !== undefined && n.y !== undefined) {
+        if (n.x < minX) minX = n.x;
+        if (n.x > maxX) maxX = n.x;
+        if (n.y < minY) minY = n.y;
+        if (n.y > maxY) maxY = n.y;
+      }
+    });
+
+    if (!isFinite(minX) || !isFinite(maxX)) {
+      setZoom(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+
+    const graphWidth = maxX - minX || 100;
+    const graphHeight = maxY - minY || 100;
+    const graphCenterX = (minX + maxX) / 2;
+    const graphCenterY = (minY + maxY) / 2;
+
+    const scaleX = (width - 120) / graphWidth;
+    const scaleY = (height - 120) / graphHeight;
+    const autoScale = Math.min(Math.max(Math.min(scaleX, scaleY), 0.4), 1.8);
+
+    const newOffsetX = width / 2 - graphCenterX * autoScale;
+    const newOffsetY = height / 2 - graphCenterY * autoScale;
+
+    setZoom(autoScale);
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -83,14 +133,16 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
     const height = canvas.height;
 
     const nodes: NodeItem[] = nodeList.map((n) => ({ id: n.id, name: n.name }));
+    nodesRef.current = nodes;
 
     const sim = d3
       .forceSimulation<NodeItem>(nodes)
-      .force('charge', d3.forceManyBody().strength(-280))
+      .force('charge', d3.forceManyBody().strength(-240))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('link', d3.forceLink<NodeItem, LinkItem>(links).id((d) => d.id).distance(100))
-      .force('collide', d3.forceCollide(35));
+      .force('link', d3.forceLink<NodeItem, LinkItem>(links).id((d) => d.id).distance(90))
+      .force('collide', d3.forceCollide(30));
 
+    simulationRef.current = sim;
     let animationFrameId: number;
 
     const render = () => {
@@ -160,6 +212,80 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
     };
   }, [nodeList, links, activeSelectedNode, zoom, offset]);
 
+  // Convert canvas pixel coordinates to graph coordinates
+  const getGraphCoords = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
+
+    const graphX = (canvasX - offset.x) / zoom;
+    const graphY = (canvasY - offset.y) / zoom;
+    return { x: graphX, y: graphY, canvasX, canvasY };
+  };
+
+  // Find node at screen/graph coordinates
+  const findNodeAt = (graphX: number, graphY: number) => {
+    return nodesRef.current.find((n) => {
+      if (n.x === undefined || n.y === undefined) return false;
+      const dx = n.x - graphX;
+      const dy = n.y - graphY;
+      return Math.sqrt(dx * dx + dy * dy) <= 18;
+    });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const coords = getGraphCoords(e.clientX, e.clientY);
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+    const clickedNode = findNodeAt(coords.x, coords.y);
+    if (clickedNode) {
+      draggedNodeRef.current = clickedNode;
+      clickedNode.fx = clickedNode.x;
+      clickedNode.fy = clickedNode.y;
+      if (simulationRef.current) simulationRef.current.alphaTarget(0.3).restart();
+    } else {
+      isDraggingCanvasRef.current = true;
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const dx = e.clientX - lastMousePosRef.current.x;
+    const dy = e.clientY - lastMousePosRef.current.y;
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+    if (draggedNodeRef.current) {
+      const coords = getGraphCoords(e.clientX, e.clientY);
+      draggedNodeRef.current.fx = coords.x;
+      draggedNodeRef.current.fy = coords.y;
+      if (simulationRef.current) simulationRef.current.alphaTarget(0.3).restart();
+    } else if (isDraggingCanvasRef.current) {
+      setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (draggedNodeRef.current) {
+      const coords = getGraphCoords(e.clientX, e.clientY);
+      const node = findNodeAt(coords.x, coords.y);
+      if (node && (node.id === draggedNodeRef.current.id)) {
+        handleSelect(node.id);
+      }
+      draggedNodeRef.current.fx = null;
+      draggedNodeRef.current.fy = null;
+      draggedNodeRef.current = null;
+      if (simulationRef.current) simulationRef.current.alphaTarget(0);
+    }
+    isDraggingCanvasRef.current = false;
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    setZoom((z) => Math.min(Math.max(0.3, z * zoomFactor), 3));
+  };
+
   const handleSelect = (id: string) => {
     if (onSelectNodeId) {
       onSelectNodeId(id === activeSelectedNode ? '' : id);
@@ -167,6 +293,8 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
       setInternalSelectedNode(id === activeSelectedNode ? null : id);
     }
   };
+
+  if (nodeList.length === 0) return null;
 
   return (
     <div className="mb-8">
@@ -185,20 +313,28 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
       </div>
 
       <div className="glass-panel p-4 relative overflow-hidden flex flex-col lg:flex-row gap-4">
-        <div className="absolute top-6 left-6 z-10 flex flex-col space-y-2 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-xl border border-white/10">
+        {/* Controls Overlay */}
+        <div className="absolute top-6 left-6 z-10 flex flex-col space-y-2 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-lg">
           <button
-            onClick={() => setZoom((z) => Math.min(z + 0.2, 2.5))}
+            onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
             className="p-2 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
             title="Zoom In"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setZoom((z) => Math.max(z - 0.2, 0.5))}
+            onClick={() => setZoom((z) => Math.max(z - 0.25, 0.3))}
             className="p-2 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
             title="Zoom Out"
           >
             <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleCenterGraph}
+            className="p-2 rounded-lg hover:bg-purple-500/20 text-purple-300 hover:text-white transition-colors"
+            title="Center & Fit Graph"
+          >
+            <Maximize2 className="w-4 h-4" />
           </button>
           <button
             onClick={() => {
@@ -214,12 +350,17 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 h-[440px] rounded-xl bg-slate-950/60 overflow-hidden relative">
+        <div ref={containerRef} className="flex-1 h-[460px] rounded-xl bg-slate-950/60 overflow-hidden relative">
           <canvas
             ref={canvasRef}
             width={800}
-            height={440}
-            className="w-full h-full cursor-grab active:cursor-grabbing"
+            height={460}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+            className="w-full h-full cursor-grab active:cursor-grabbing select-none"
           />
         </div>
 
@@ -228,7 +369,7 @@ export const ForceGraphView: React.FC<ForceGraphViewProps> = ({
             <h4 className="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">
               Select Concept Node
             </h4>
-            <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+            <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
               {nodeList.map((node) => (
                 <button
                   key={node.id}
