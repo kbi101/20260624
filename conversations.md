@@ -418,3 +418,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** Commit and push.
 
 **A:** Staged changes (`git add .`), committed with `feat: implement Phase 008 React Motion UI, HIST D3 Force Graph, and Neo4j hardening` (commit `9dc4546`), and pushed cleanly to remote branch `origin/main`.
+
+## 2026-07-21T15:00:31-05:00 — Cognitive Textbook & Topic History Screenshots
+
+**Q:** Need to capture screenshot to show Cognitive Textbook and topic History.
+
+**A:** Automated browser capture via Playwright Chrome for `screenshots/react_motion_uct_dashboard.png` (Cognitive Textbook topic dashboard with dimension bars, concept cards, D3 force graph, sequence pipeline, causal loops, matrices) and `screenshots/react_motion_history_drawer.png` (slide-over Topic History Drawer). Updated `README.md`, committed (`ec4c532`), and pushed to `origin/main`.
