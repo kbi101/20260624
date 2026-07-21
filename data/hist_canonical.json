@@ -271,5 +271,75 @@
       "General Lee"
     ],
     "first_seen": "2026-07-09T15:58:45.919288"
+  },
+  "alexander_h_stephens": {
+    "canonical_id": "alexander_h_stephens",
+    "names": [
+      "Alexander H. Stephens"
+    ],
+    "first_seen": "2026-07-13T22:07:47.050115"
+  },
+  "franklin_pierce": {
+    "canonical_id": "franklin_pierce",
+    "names": [
+      "Franklin Pierce"
+    ],
+    "first_seen": "2026-07-13T22:07:47.051058"
+  },
+  "zachary_taylor": {
+    "canonical_id": "zachary_taylor",
+    "names": [
+      "Zachary Taylor"
+    ],
+    "first_seen": "2026-07-13T22:07:47.051348"
+  },
+  "varina_howell": {
+    "canonical_id": "varina_howell",
+    "names": [
+      "Varina Howell"
+    ],
+    "first_seen": "2026-07-13T22:07:47.051778"
+  },
+  "sarah_knox_taylor": {
+    "canonical_id": "sarah_knox_taylor",
+    "names": [
+      "Sarah Knox Taylor"
+    ],
+    "first_seen": "2026-07-13T22:07:47.052054"
+  },
+  "joseph_emory_davis": {
+    "canonical_id": "joseph_emory_davis",
+    "names": [
+      "Joseph Emory Davis"
+    ],
+    "first_seen": "2026-07-13T22:07:47.052497"
+  },
+  "samuel_emory_davis": {
+    "canonical_id": "samuel_emory_davis",
+    "names": [
+      "Samuel Emory Davis"
+    ],
+    "first_seen": "2026-07-13T22:07:47.052942"
+  },
+  "thomas_hinds": {
+    "canonical_id": "thomas_hinds",
+    "names": [
+      "Thomas Hinds"
+    ],
+    "first_seen": "2026-07-13T22:07:47.053199"
+  },
+  "mexican_american_war": {
+    "canonical_id": "mexican_american_war",
+    "names": [
+      "Mexican-American War"
+    ],
+    "first_seen": "2026-07-13T22:07:47.053580"
+  },
+  "war_of_1812": {
+    "canonical_id": "war_of_1812",
+    "names": [
+      "War of 1812"
+    ],
+    "first_seen": "2026-07-13T22:07:47.053915"
   }
 }

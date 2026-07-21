@@ -13,9 +13,11 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 app = FastAPI(title="Morphos Cognitive Dashboard")
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+_FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+if os.path.exists(os.path.join(_FRONTEND_DIST, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_FRONTEND_DIST, "assets")), name="assets")
 
-from fastapi.staticfiles import StaticFiles as _SF
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 from webui.hist_app import router as hist_router
 app.include_router(hist_router)
@@ -387,7 +389,11 @@ def _generate_full(topic: str, depth: int, mode: str):
 
 @app.get("/hist", response_class=HTMLResponse)
 async def hist_page():
-    """Serve the HIST history graph page."""
+    """Serve the HIST history graph page or React SPA."""
+    react_index = os.path.join(_FRONTEND_DIST, "index.html")
+    if os.path.exists(react_index):
+        with open(react_index) as f:
+            return f.read()
     hp = os.path.join(_TEMPLATE_DIR, "hist_index.html")
     if os.path.exists(hp):
         with open(hp) as f:
@@ -397,7 +403,11 @@ async def hist_page():
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """Serve the main dashboard page."""
+    """Serve the main React Motion UI dashboard page."""
+    react_index = os.path.join(_FRONTEND_DIST, "index.html")
+    if os.path.exists(react_index):
+        with open(react_index) as f:
+            return f.read()
     with open(os.path.join(_TEMPLATE_DIR, "index.html")) as f:
         return f.read()
 

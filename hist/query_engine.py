@@ -250,7 +250,7 @@ def get_graph_data(query=None, hop_depth=1, max_nodes=80):
     """Return a subgraph for the timeline frontend.
 
     If query is given, seed on matching nodes and expand hop_depth hops.
-    If query is None, return the last `max_nodes // 2` events by date.
+    If query is None, return nodes up to max_nodes limit.
     Caps total returned nodes to max_nodes so the browser never chokes.
     """
 
@@ -263,7 +263,7 @@ def get_graph_data(query=None, hop_depth=1, max_nodes=80):
             {"q": query},
         )
         if not seeds:
-            return {"events": [], "persons": [], "edges": []}
+            return {"nodes": [], "events": [], "persons": [], "edges": []}
 
         seed_ids = [r["node_id"] for r in seeds]
 
@@ -276,32 +276,23 @@ def get_graph_data(query=None, hop_depth=1, max_nodes=80):
             {"ids": seed_ids},
         )
 
-        expanded_ids = [r["node_id"] for r in all_nodes_cur][:max_nodes]
+        expanded_ids = [r["node_id"] for r in all_nodes_cur if r.get("node_id")][:max_nodes]
     else:
-        # Default: most recent events
+        # Default: sample graph nodes up to max_nodes
         recent = run_cypher(
-            "MATCH (e:Event) WHERE e.date IS NOT NULL "
-            "RETURN e.node_id AS node_id, labels(e)[0] AS label "
-            "ORDER BY e.date DESC LIMIT $limit",
-            {"limit": max_nodes // 2},
+            "MATCH (n) RETURN n.node_id AS node_id, labels(n)[0] AS label LIMIT $limit",
+            {"limit": max_nodes},
         )
-        expanded_ids = [r["node_id"] for r in recent]
+        expanded_ids = [r["node_id"] for r in recent if r.get("node_id")]
 
     if not expanded_ids:
-        return {"events": [], "persons": [], "edges": []}
+        return {"nodes": [], "events": [], "persons": [], "edges": []}
 
-    # Step 3 — fetch properties for the selected nodes
-    events_cur = run_cypher(
-        "UNWIND $ids AS nid MATCH (e:Event {node_id: nid}) "
-        "RETURN e.node_id AS node_id, e.name AS name, "
-        "e.date AS date, e._source_url AS source_url",
-        {"ids": expanded_ids},
-    )
-
-    persons_cur = run_cypher(
-        "UNWIND $ids AS nid MATCH (p:Person {node_id: nid}) "
-        "RETURN p.node_id AS node_id, p.name AS name, "
-        "p._source_url AS source_url",
+    # Step 3 — fetch properties for all selected nodes
+    nodes_cur = run_cypher(
+        "UNWIND $ids AS nid MATCH (n {node_id: nid}) "
+        "RETURN n.node_id AS node_id, n.name AS name, labels(n)[0] AS label, "
+        "n.date AS date, n._source_url AS source_url",
         {"ids": expanded_ids},
     )
 
@@ -312,26 +303,28 @@ def get_graph_data(query=None, hop_depth=1, max_nodes=80):
         {"ids": expanded_ids},
     )
 
+    nodes_list = []
     ev_list = []
-    for rec in events_cur:
+    per_list = []
+
+    for rec in nodes_cur:
         d = rec.get("date") or ""
         year_m = re.search(r"\b(\d{4})\b", str(d))
-        e = {
+        lbl = rec.get("label") or "Node"
+        item = {
             "node_id": rec["node_id"],
-            "name": rec["name"],
+            "name": rec.get("name") or rec["node_id"],
+            "label": lbl,
+            "type": lbl.lower(),
             "date": str(d) if d else "",
             "year": int(year_m.group(1)) if year_m else None,
             "source_url": str(rec.get("source_url") or ""),
         }
-        ev_list.append(e)
-
-    per_list = []
-    for rec in persons_cur:
-        per_list.append({
-            "node_id": rec["node_id"],
-            "name": rec["name"],
-            "source_url": str(rec.get("source_url") or ""),
-        })
+        nodes_list.append(item)
+        if lbl.lower() == "event":
+            ev_list.append(item)
+        elif lbl.lower() == "person":
+            per_list.append(item)
 
     ed_list = []
     for rec in edges_cur:
@@ -341,7 +334,12 @@ def get_graph_data(query=None, hop_depth=1, max_nodes=80):
             "tgt": rec.get("tgt", ""),
         })
 
-    return {"events": ev_list, "persons": per_list, "edges": ed_list}
+    return {
+        "nodes": nodes_list,
+        "events": ev_list,
+        "persons": per_list,
+        "edges": ed_list,
+    }
 
 
 def get_node_details(node_id):

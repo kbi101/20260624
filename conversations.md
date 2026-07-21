@@ -340,3 +340,75 @@ Two functions added to `morphos/tools/web_search.py`:
 - `_is_ad_article()`: Skips articles containing "sponsored", "promoted", "ad-", `.ddg_sp` markers so ad content never leaks into results.
 
 Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads redirects, and takes first 8 clean hits. Base64 padding is auto-fixed for truncated b64 payloads.
+
+## 2026-07-21T14:21:22-05:00 — WebUI Upgrade to Modern React Motion UI Planning
+
+**Q:** Study the codebase and create a plan to upgrade `webui` to a modern React Motion UI powered by latest UI technology.
+
+**A:** Analyzed `webui/server.py`, `webui/hist_app.py`, and static HTML templates (`index.html`, `dashboard.html`, `hist_index.html`). Created spec `008-React-Motion-UI.md` and implementation plan `implementation_plan.md` artifact detailing an upgrade to React 19, Vite, Framer Motion, Tailwind CSS, Lucide icons, and D3 force graph visualizers in a unified SPA.
+
+## 2026-07-21T14:25:00-05:00 — Phase 008 React Motion UI Implementation Complete
+
+**Q:** Put the change plan in 008* md file and go ahead implement it.
+
+**A:** Created `spec/008-React-Motion-UI.md`. Built React 19 + Vite + TypeScript application in `webui/frontend` with Tailwind CSS, Framer Motion, Lucide icons, and D3 force graph visualizers. Implemented unified SPA components (`UctHero`, `DimensionBars`, `ConceptCard`, `SequencePipeline`, `CausalLoopView`, `MatrixGrid`, `ForceGraphView`, `HistControls`, `HistTimelineCanvas`, `HistEntityChips`, `HistAnswerDrawer`, `HistoryDrawer`). Updated `webui/server.py` to serve built SPA bundle at `/`. Verified clean build (`npm run build`) and FastAPI server initialization (25 routes).
+
+## 2026-07-21T14:30:10-05:00 — Neo4j Connection Refused Error Handling Fix
+
+**Q:** `neo4j.exceptions.ServiceUnavailable: Couldn't connect to localhost:7689 ... Connection refused` error when running uvicorn server.
+
+**A:** Added graceful fallback error handling in `hist/neo4j_driver/connect.py` (`run_cypher` & `run_cypher_single`) and all `/api/hist/*` endpoints in `webui/hist_app.py`. Connection failures now log a non-fatal warning and return clean JSON fallback structures (`{"nodes": [], "edges": [], "error": ...}`) instead of throwing 500 exceptions when Neo4j container is offline.
+
+## 2026-07-21T14:36:29-05:00 — Neo4j Unauthorized Authentication & Config Overrides
+
+**Q:** `Neo.ClientError.Security.Unauthorized: The client is unauthorized due to authentication failure` when manually running Neo4j.
+
+**A:** Updated `hist/config.py` to support environment variables (`HIST_NEO4J_PASSWORD`, `NEO4J_PASSWORD`, `HIST_NEO4J_USER`, `HIST_NEO4J_URI`, `HIST_DB_NAME`) and `.env` file parsing. Updated `HistDriver` in `hist/neo4j_driver/connect.py` to auto-clear cached driver instances on auth failures and fall back to the default `neo4j` database if `hist` DB is absent.
+
+## 2026-07-21T14:43:25-05:00 — Neo4j Missing Label DBMS Schema Notification Suppression
+
+**Q:** Neo4j prints DBMS server notification warnings about missing labels (`Event`, `Person`) and missing properties (`node_id`, `date`) when graph database is empty.
+
+**A:** Configured `hist/neo4j_driver/connect.py` to set `neo4j` & `neo4j.notifications` logger levels to `ERROR` and set `notifications_min_severity = NotificationSeverity.OFF`. Both `GET /api/hist/stats` and `GET /api/hist/graph-data` return `200 OK` silently on fresh empty databases.
+
+## 2026-07-21T14:45:14-05:00 — Neo4j Current Credentials Query
+
+**Q:** What is the current credential for Neo4j?
+
+**A:** Reported current defaults from `hist/config.py`: URI `bolt://localhost:7689`, User `neo4j`, Password `morphos_hist`, Database `neo4j` (all overridable via env vars `HIST_NEO4J_*` or `.env` file).
+
+## 2026-07-21T14:47:38-05:00 — Neo4j Database Instance Name Query
+
+**Q:** Is our database instance `morphos`?
+
+**A:** Verified live databases on running Neo4j instance via `SHOW DATABASES`. Available databases are `hist`, `neo4j`, `system` (no database named `morphos`). Updated `hist/config.py` default `HIST_DB_NAME` to `hist` (with automatic fallback to `neo4j`).
+
+## 2026-07-21T14:49:19-05:00 — .env Configuration File Creation
+
+**Q:** Create `.env` and put those variables there.
+
+**A:** Created `.env` at project root with `HIST_NEO4J_URI`, `HIST_NEO4J_USER`, `HIST_NEO4J_PASSWORD`, `HIST_DB_NAME`. Added `.env` to `.gitignore`. Verified `hist/config.py` automatically parses `.env` parameters on server startup.
+
+## 2026-07-21T14:51:05-05:00 — HIST Graph Nodes and Edges Retrieval Fix
+
+**Q:** We should have some node labels/edges in hist, but nothing is showing in HIST Graph.
+
+**A:** Queried Neo4j `hist` database directly and discovered 144 nodes and 112 edges stored (Abraham Lincoln, Civil War, Gettysburg, Grant, Lee). Root cause: `hist/query_engine.py:get_graph_data()` previously ran `MATCH (e:Event) WHERE e.date IS NOT NULL` which filtered out all `Person` nodes and undated events, and returned separate `events`/`persons` arrays instead of `nodes`. Updated `get_graph_data()` to query all nodes (`MATCH (n)`) and output a combined `nodes` array. Tested in Python: now returns all nodes and edges for rendering in the HIST React UI.
+
+## 2026-07-21T14:53:37-05:00 — HIST Network Force Graph View Mode Addition
+
+**Q:** Only see timeline canvas, not the graph.
+
+**A:** Added a view mode toggle (`⏱ Timeline` vs `◎ Network Graph`) in `HistControls.tsx`. Enhanced `ForceGraphView.tsx` to support both UCT concept graphs and HIST node/edge network force graphs with D3 physics, drag, zoom/pan controls, and color-coded relationship edges. Updated `App.tsx` to default HIST tab view mode to `◎ Network Graph`. Rebuilt frontend assets (`npm run build`). All 144 nodes and 112 edges now render in the interactive D3 force graph.
+
+## 2026-07-21T14:56:17-05:00 — Legacy UI Artifacts Status Explanation
+
+**Q:** What happens to the old UI artifacts?
+
+**A:** Explained that all legacy static files (`webui/static/*`: `index.html`, `dashboard.html`, `hist_index.html`, `styles.css`, `dash.js`, `hist_timeline.js`) remain preserved on disk. FastAPI keeps `/static` mounted and automatically falls back to legacy HTML templates if the React build (`webui/frontend/dist`) is ever absent. Option provided to retain them as fallback or prune.
+
+## 2026-07-21T14:57:06-05:00 — README.md & Screenshot Updates
+
+**Q:** Generate new README.md by capturing updated screenshot.
+
+**A:** Captured updated high-resolution browser screenshots (`screenshots/react_motion_dashboard.png` and `screenshots/react_motion_hist_graph.png`) via Playwright Chrome of the React Motion UI. Rewrote `README.md` to document the React 19 + Vite + Framer Motion + Tailwind CSS SPA architecture, UCT textbook engine, HIST Neo4j knowledge graph system, Mermaid architecture diagrams, and quickstart commands.

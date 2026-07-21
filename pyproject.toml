@@ -19,5 +19,5 @@ dependencies = [
 morphos = "morphos.cli:main"
 
 [build-system]
-requirements = ["hatchling"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"

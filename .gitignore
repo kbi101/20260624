@@ -9,3 +9,5 @@ data/growth_report_*.json
 .venv/
 env/
 debug.log
+data/hist_cache/
+.env
