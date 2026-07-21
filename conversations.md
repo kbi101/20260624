@@ -424,3 +424,15 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** Need to capture screenshot to show Cognitive Textbook and topic History.
 
 **A:** Automated browser capture via Playwright Chrome for `screenshots/react_motion_uct_dashboard.png` (Cognitive Textbook topic dashboard with dimension bars, concept cards, D3 force graph, sequence pipeline, causal loops, matrices) and `screenshots/react_motion_history_drawer.png` (slide-over Topic History Drawer). Updated `README.md`, committed (`ec4c532`), and pushed to `origin/main`.
+
+## 2026-07-21T15:02:54-05:00 — History Drawer Topic Load & Z-Index Fix
+
+**Q:** After you click on History drawer, you need to wait for the topic textbook to load.
+
+**A:** Fixed z-index layering in `HistoryDrawer.tsx` backdrop (`z-40`) so topic item cards receive clicks cleanly. Updated Playwright capture script to open History drawer, click a cached topic, wait for topic dashboard content to render (`h2.text-2xl`), and save `screenshots/react_motion_uct_dashboard.png`. Rebuilt frontend assets (`npm run build`), committed (`9a89f88`), and pushed to `origin/main`.
+
+## 2026-07-21T15:05:30-05:00 — Phase 008 Completion & User Feedback
+
+**Q:** Now its better!
+
+**A:** User confirmed satisfaction with the React Motion UI, D3 force graph visualizer, topic history drawer, Neo4j integration, and updated README screenshots. All Phase 008 goals complete and pushed.

@@ -33,15 +33,22 @@ Launch the modern Single Page Application (SPA) at `http://localhost:8000`:
 python -m uvicorn webui.server:app --reload
 ```
 
-### 1. Cognitive Textbook Dashboard
-Synthesizes any topic into an interactive multi-dimensional dashboard with animated dimension bars, concept cards (L0-L3 level compressions), execution sequences, causal loops, and D3 force graphs:
+### 1. Cognitive Textbook Dashboard (Loaded Topic)
+Synthesizes any topic into an interactive multi-dimensional dashboard with animated dimension bars, concept cards (L0-L3 level compressions), execution sequences, causal loops, comparison matrices, and interactive D3 force graphs:
 
-<img src="screenshots/react_motion_uct_dashboard.png" alt="Morphos Cognitive Textbook Dashboard" width="100%" />
+<img src="screenshots/react_motion_uct_dashboard.png" alt="Morphos Cognitive Textbook Dashboard Loaded" width="100%" />
+
+#### Full Cognitive Textbook Scroll
+<img src="screenshots/react_motion_uct_dashboard_full.png" alt="Morphos Full Cognitive Textbook Scroll" width="100%" />
+
+---
 
 ### 2. Persistent Topic History Drawer
 Slide-over drawer providing instant access (<100ms load from disk cache) to all previously generated topic dashboards, with topic filtering and deletion:
 
 <img src="screenshots/react_motion_history_drawer.png" alt="Morphos Topic History Drawer" width="100%" />
+
+---
 
 ### 3. HIST Knowledge Network Graph
 Neo4j-backed factual history graph with interactive D3 force-directed node physics, zoom/pan controls, timeline scrubber, and Cypher Q&A engine:
