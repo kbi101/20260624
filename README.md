@@ -2,7 +2,7 @@
 
 A fully autonomous, locally-run AI agent capable of web research, code execution, financial analysis, self-criticism, a **Universal Cognitive Textbook (UCT)** engine, and a **HIST Knowledge Graph & Timeline Engine**. Built with a modern **React Motion UI** powered by React 19, Vite, Framer Motion, Tailwind CSS, Lucide icons, and D3 force graph visualizers. No cloud APIs. Everything runs locally on your machine.
 
-<img src="screenshots/react_motion_dashboard.png" alt="Morphos React Motion Cognitive Textbook Dashboard" width="100%" />
+<img src="screenshots/react_motion_dashboard.png" alt="Morphos React Motion UI Landing Page" width="100%" />
 
 ```
 ┌─────────── Query ─────────────▶ Multi-Agent Router (optional)
@@ -33,15 +33,20 @@ Launch the modern Single Page Application (SPA) at `http://localhost:8000`:
 python -m uvicorn webui.server:app --reload
 ```
 
+### 1. Cognitive Textbook Dashboard
+Synthesizes any topic into an interactive multi-dimensional dashboard with animated dimension bars, concept cards (L0-L3 level compressions), execution sequences, causal loops, and D3 force graphs:
+
+<img src="screenshots/react_motion_uct_dashboard.png" alt="Morphos Cognitive Textbook Dashboard" width="100%" />
+
+### 2. Persistent Topic History Drawer
+Slide-over drawer providing instant access (<100ms load from disk cache) to all previously generated topic dashboards, with topic filtering and deletion:
+
+<img src="screenshots/react_motion_history_drawer.png" alt="Morphos Topic History Drawer" width="100%" />
+
+### 3. HIST Knowledge Network Graph
+Neo4j-backed factual history graph with interactive D3 force-directed node physics, zoom/pan controls, timeline scrubber, and Cypher Q&A engine:
+
 <img src="screenshots/react_motion_hist_graph.png" alt="Morphos HIST Knowledge Network Graph" width="100%" />
-
-### Web UI Features & Tech Stack
-
-- **Frontend Core**: React 19 + Vite + TypeScript
-- **Styling & Aesthetics**: Cyberpunk Dark Glassmorphism (`backdrop-filter: blur(18px)`), Tailwind CSS, Inter & JetBrains Mono typography
-- **Motion & Micro-interactions**: `framer-motion` for spring physics, card expansions, tab view transitions, and history drawers
-- **Iconography**: `lucide-react`
-- **Graph Visualizer**: Interactive D3 force-directed network graph (`d3-force` + SVG/Canvas rendering with node dragging, zoom/pan controls, prerequisite flow highlights, and side details drawer)
 
 ---
 
@@ -125,6 +130,7 @@ flowchart TB
         HERO["UctHero.tsx — Topic Search & Selectors"]
         CARDS["ConceptCard.tsx — L0-L3 Compressions"]
         GRAPH["ForceGraphView.tsx — D3 Force Graph Engine"]
+        DRAWER["HistoryDrawer.tsx — Slide-over Topic Cache"]
         HIST_UI["HistControls.tsx + HistTimelineCanvas.tsx"]
     end
 
