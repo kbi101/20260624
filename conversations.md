@@ -490,3 +490,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** When we generate, we want it to be comprehensive hence no need for restriction, but when we display we do to get some focus.
 
 **A:** Exactly aligned with UCT architecture: Refactored `MEGA_PROMPT` in `uct/generator.py` to ensure LLM knowledge generation remains 100% comprehensive and unconstrained across all dimensions/concepts. Kept **Mode** strictly dedicated to client-side display focusing, panel re-ordering, resolution auto-expansion (L0-L3), and perspective highlighting. Committed (`98d9d99`) and pushed to `origin/main`.
+
+## 2026-07-23T12:20:27-05:00 — Instant Interactive Mode Switcher Pills Fix
+
+**Q:** But I don't see any changes in 2 after restarted the app.
+
+**A:** Discovered that in the React UI, selecting a Mode in the search hero dropdown didn't update state or re-render until form re-submission, and topic header static mode badge was locked to cached JSON. Implemented instant client-side Mode reactivity: (1) Added interactive **Mode Switcher Pills** (`[📖 Understand]` `[🎯 Exam]` `[⚡ Practice]` `[🔬 Research]` `[📋 Overview]`) directly next to the topic title on the textbook header. (2) Bound `activeMode` state across `UctHero` and `App.tsx`. (3) Clicking any mode pill instantly re-orders sections (e.g. moving Execution Sequences to top in Practice Mode) and auto-expands concept resolutions (e.g. L3 Expert in Exam Mode) without reloading from server. Rebuilt frontend, verified in Playwright, committed (`a218dfa`), and pushed to `origin/main`.
