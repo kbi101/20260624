@@ -10,7 +10,11 @@ class Compressor:
         self.llm = llm_client  # Reserved for future LLM-driven compression
 
     def compress_all(self, topic: str, concepts: list[Concept]) -> list[CompressionLevels]:
-        return [self._derive_levels(c) for c in concepts[:8] if c.definition]
+        topic_lower = topic.strip().lower()
+        matched = [c for c in concepts if c.name.strip().lower() == topic_lower or topic_lower in c.name.strip().lower() or c.name.strip().lower() in topic_lower]
+        unmatched = [c for c in concepts if c not in matched]
+        ordered_concepts = matched + unmatched
+        return [self._derive_levels(c) for c in ordered_concepts[:8] if c.definition]
 
     @staticmethod
     def _derive_levels(c: Concept) -> CompressionLevels:

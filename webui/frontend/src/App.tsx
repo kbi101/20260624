@@ -183,11 +183,19 @@ export function App() {
                       <h2 className="text-2xl font-extrabold text-white capitalize">
                         {topicData.topic}
                       </h2>
-                      {topicData.compressions?.[0]?.level_0_essence && (
-                        <p className="mt-1 text-sm text-purple-300 font-light">
-                          "{topicData.compressions[0].level_0_essence}"
-                        </p>
-                      )}
+                      {(() => {
+                        if (!topicData.compressions?.length) return null;
+                        const tLower = topicData.topic.toLowerCase();
+                        const match = topicData.compressions.find(
+                          (c) => c.concept_name.toLowerCase().includes(tLower) || tLower.includes(c.concept_name.toLowerCase())
+                        );
+                        const essence = match?.level_0_essence || topicData.compressions[0].level_0_essence;
+                        return (
+                          <p className="mt-1 text-sm text-purple-300 font-light">
+                            "{essence}"
+                          </p>
+                        );
+                      })()}
                     </div>
                     <a
                       href={`/api/json?topic=${encodeURIComponent(topicData.topic)}`}

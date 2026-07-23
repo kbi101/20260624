@@ -75,8 +75,16 @@ function renderHeader(data) {
   const el = document.getElementById('essenceLine');
   if (!el) return;
   let essence = '';
-  if (data.compressions?.[0]?.level_0_essence) essence = data.compressions[0].level_0_essence;
-  else if (data.concepts?.[0]) essence = `${data.concepts[0].name}: ${data.concepts[0].definition}`;
+  if (data.compressions && data.compressions.length) {
+    const tLower = (data.topic || '').toLowerCase();
+    const match = data.compressions.find(c => {
+      const cLower = (c.concept_name || '').toLowerCase();
+      return cLower.includes(tLower) || tLower.includes(cLower);
+    });
+    essence = match ? match.level_0_essence : data.compressions[0].level_0_essence;
+  } else if (data.concepts?.[0]) {
+    essence = `${data.concepts[0].name}: ${data.concepts[0].definition}`;
+  }
   el.textContent = essence;
 
   const h2 = document.querySelector('.topic-name');

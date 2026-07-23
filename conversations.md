@@ -454,3 +454,15 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** HIST Interactive Knowledge Graph cannot move and center the graph.
 
 **A:** Added complete canvas mouse & wheel event listeners to `ForceGraphView.tsx`: background click-and-drag canvas panning, individual node pinning & physics dragging, mouse wheel zooming, and a dedicated **Center & Fit Graph** (`Maximize2` button) that calculates the node bounding box and centers all nodes inside the viewport. Rebuilt frontend (`npm run build`), committed (`1104e55`), and pushed to `origin/main`.
+
+## 2026-07-21T15:21:31-05:00 — March to the Sea Node Retrieval & Fuzzy Typo Search Fix
+
+**Q:** We have a "Match to the See" topic, but no node in graph.
+
+**A:** Verified `march_to_the_sea` node exists in Neo4j `hist` database (node #114). Two issues fixed in `hist/query_engine.py:get_graph_data()`: (1) Increased default `max_nodes` limit from 80 to 250 so all 144 nodes display on start; (2) Added `difflib.SequenceMatcher` fuzzy similarity ratio fallback (scoring 88% match for "Match to the See" -> "March to the Sea"). Verified in Python, committed (`022bf08`), and pushed to `origin/main`.
+
+## 2026-07-23T12:00:16-05:00 — Contango Topic Essence Discrepancy Tracing & Fix
+
+**Q:** In cognitive textbook for topic Contango: "The current market price at which a commodity or asset can be bought or sold for immediate delivery"; but in its wiki reference, we have Contango is a situation in which the futures price (or forward price) of a commodity is higher than the spot price., trace our ingestion process to see why the discrepancy.
+
+**A:** Traced pipeline: (1) Ingestion/LLM generation (`uct/generator.py`) correctly produced 7 concepts: Spot Price (1st), Futures Contract (2nd), Cost of Carry (3rd), Contango (4th). Concept #4 "Contango" accurately defined it as futures > spot price; Concept #1 "Spot Price" defined immediate market price. (2) Compressor (`uct/compressor.py`) derived resolution levels for concepts in list order. (3) Bug root cause: UI rendering components (`App.tsx`, `dash.js`, `renderer.py`) naively hardcoded `compressions[0]` for the header essence quote under the main topic title. Since "Spot Price" was concept #0, the UI rendered Spot Price's definition under the title "Contango". (4) Fixed `uct/compressor.py` to prioritize matching topic concepts to index 0, and updated `App.tsx`, `dash.js`, `renderer.py` to dynamically search `compressions` for a concept matching the topic name before falling back to index 0. Rebuilt frontend (`npm run build`).

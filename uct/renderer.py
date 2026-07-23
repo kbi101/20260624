@@ -64,12 +64,19 @@ class UCTRenderer:
     def _render_top(self, buf, model: TopicModel, elements: list):
         title = f"📖 {model.topic}"
         
-        # Find Level 0 essence from compressions
+        # Find Level 0 essence from compressions matching topic name
         essence = ""
+        topic_lower = model.topic.strip().lower()
         for comp in model.compressions:
-            if comp.level_0_essence:
+            cname = comp.concept_name.strip().lower()
+            if comp.level_0_essence and (topic_lower in cname or cname in topic_lower):
                 essence = comp.level_0_essence
                 break
+        if not essence:
+            for comp in model.compressions:
+                if comp.level_0_essence:
+                    essence = comp.level_0_essence
+                    break
         
         # Fallback: use first concept definition
         if not essence and model.concepts:
