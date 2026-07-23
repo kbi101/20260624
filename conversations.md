@@ -502,3 +502,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** That looks perfect! Commit and push.
 
 **A:** Committed all updates (`f59d991`) and pushed to `origin/main`. Work complete!
+
+## 2026-07-23T12:28:58-05:00 — Last 5 Researched Topics in Control Board "Try:" Section
+
+**Q:** In the control board, the Try: should show last 5 topics researched.
+
+**A:** Updated `UctHero.tsx` and `App.tsx` so the `Try:` quick tag section dynamically displays the user's **last 5 topics researched** (sorted by timestamp descending from research history) with fallback example topics. Clicking any tag instantly loads or generates that topic dashboard. Rebuilt frontend (`npm run build`), verified in Playwright (`Contango`, `TCP Congestion Control`, `Least Privilege In AWS Cloud Infrastructure`, `Enterprise Architect Toolings`, `Enterprise Architect Roles And Responsibilities`), committed (`0a7594e`), and pushed to `origin/main`.
