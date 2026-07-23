@@ -496,3 +496,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** But I don't see any changes in 2 after restarted the app.
 
 **A:** Discovered that in the React UI, selecting a Mode in the search hero dropdown didn't update state or re-render until form re-submission, and topic header static mode badge was locked to cached JSON. Implemented instant client-side Mode reactivity: (1) Added interactive **Mode Switcher Pills** (`[📖 Understand]` `[🎯 Exam]` `[⚡ Practice]` `[🔬 Research]` `[📋 Overview]`) directly next to the topic title on the textbook header. (2) Bound `activeMode` state across `UctHero` and `App.tsx`. (3) Clicking any mode pill instantly re-orders sections (e.g. moving Execution Sequences to top in Practice Mode) and auto-expands concept resolutions (e.g. L3 Expert in Exam Mode) without reloading from server. Rebuilt frontend, verified in Playwright, committed (`a218dfa`), and pushed to `origin/main`.
+
+## 2026-07-23T12:22:43-05:00 — Final User Approval
+
+**Q:** That looks perfect! Commit and push.
+
+**A:** Committed all updates (`f59d991`) and pushed to `origin/main`. Work complete!
