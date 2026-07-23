@@ -19,7 +19,7 @@ class UCTEngine:
         """Full pipeline. Returns (rendered_text, topic_model)."""
 
         # Phase 1: Generate structured objects (single-shot mega-prompt)
-        model = self.generator.generate(topic, research_context, mode=self.renderer.mode)
+        model = self.generator.generate(topic, research_context)
 
         # Phase 2: Compress concepts into resolution levels
         if model.concepts:

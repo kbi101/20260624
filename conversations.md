@@ -478,3 +478,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** Does the mode dictate knowledge generation or just display?
 
 **A:** Clarified that the engine (`uct/generator.py`) generates a comprehensive single-shot canonical `TopicModel` containing all multi-dimensional panels (concepts, sequence steps, causal loops, matrices, graph edges). **Mode** acts as a pedagogical parameter passed through `UCTEngine` and `UCTRenderer` to dictate display filtering and perspective focus, while **Depth** dictates resolution zoom level (L0 to L3).
+
+## 2026-07-23T12:13:43-05:00 — Mode Reactivity Implementation in Generator & React UI
+
+**Q:** But when I switch mode, nothing happens.
+
+**A:** Identified that `mode` was previously ignored by the backend serializer (`server.py`) and UI layout (`App.tsx`). Implemented full Mode reactivity: (1) Added `mode` to `MEGA_PROMPT` in `uct/generator.py` so LLM generation aligns with mode guidance. (2) Passed `mode` in `server.py:_generate_full()` API payload. (3) Updated `App.tsx` and `ConceptCard.tsx` so switching mode dynamically updates the header badge (e.g. `🎯 Exam Prep Focus`, `⚡ Practice Workflow`, `🔬 Research Dynamics`), auto-expands default concept levels (e.g. L3 Expert for Exam Mode), and reorders dashboard panels (e.g. prioritizing Sequence Steps for Practice Mode, Causal Loops for Research Mode). Rebuilt frontend, verified in Playwright, committed (`67f6bf4`), and pushed to `origin/main`.
