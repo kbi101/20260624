@@ -54,8 +54,8 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-white">Dashboard History</h2>
-                  <p className="text-xs text-slate-400">Saved knowledge dashboards</p>
+                  <h2 className="text-base font-semibold text-white">Textbook History</h2>
+                  <p className="text-xs text-slate-400">Saved cognitive textbook research topics</p>
                 </div>
               </div>
               <button

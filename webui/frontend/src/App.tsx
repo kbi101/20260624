@@ -152,7 +152,10 @@ export function App() {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         history={historyList}
-        onSelectTopic={(t) => handleGenerateTopic(t, 1, 'understand')}
+        onSelectTopic={(t) => {
+          setActiveTab('uct');
+          handleGenerateTopic(t, 1, 'understand');
+        }}
         onDeleteTopic={handleDeleteHistory}
       />
 

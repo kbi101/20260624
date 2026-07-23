@@ -88,15 +88,17 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onOpenHistory}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-all"
-          >
-            <Clock className="w-4 h-4 text-purple-400" />
-            <span>History</span>
-          </motion.button>
+          {activeTab === 'uct' && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onOpenHistory}
+              className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-all"
+            >
+              <Clock className="w-4 h-4 text-purple-400" />
+              <span>Textbook History</span>
+            </motion.button>
+          )}
         </div>
 
       </div>
