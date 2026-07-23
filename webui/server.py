@@ -376,12 +376,14 @@ def _generate_full(topic: str, depth: int, mode: str):
     """Blocking work: research + generate + serialize. Runs off the asyncio loop."""
     cached_data, cached_refs = _load_cached(topic)
     if cached_data and cached_refs is not None and cached_data.get("concepts"):
+        cached_data["mode"] = mode
         return cached_data, cached_refs
 
     engine, cfg = _build_engine(depth, mode)
     research_ctx, ref_urls = _gather_research(topic)
     _, model = engine.generate_dashboard(topic, research_context=research_ctx)
     data = _model_to_dict(model)
+    data["mode"] = mode
     refs_json = [{"title": t, "url": u} for t, u in ref_urls]
     _save_cached(topic, data, refs_json)
     return data, ref_urls

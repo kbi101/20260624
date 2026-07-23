@@ -19,6 +19,7 @@ from uct.models import (
 MEGA_PROMPT = r"""You are a Universal Cognitive Textbook engine. Given a topic, produce a complete structured knowledge dashboard in ONE JSON response.
 
 TOPIC: {topic}
+MODE: {mode}
 
 Return STRICT JSON with this exact structure (no prose outside the JSON):
 
@@ -80,6 +81,12 @@ RULES:
 - At least 1 comparison matrix
 - 6-12 edges between concepts (types: prerequisite, enables, contradicts, generalizes, specializes, analogous_to, historically_follows)
 - Scale levels: physical, component, system, network, emergent
+- Mode guidance:
+  * understand: balanced conceptual overview
+  * exam: emphasize hard constraints, edge cases, and failure modes
+  * practice: emphasize detailed sequence steps, transformations, and failure conditions
+  * research: emphasize causal loops, graph edge network, and comparative matrices
+  * overview: concise definitions and clear taxonomy
 - DO NOT include markdown or prose outside the JSON
 """
 
@@ -92,9 +99,9 @@ class UCTGenerator:
 
     # ── Public API ─────────────────────────────────────────────────
 
-    def generate(self, topic: str, research_context: str = "") -> TopicModel:
+    def generate(self, topic: str, research_context: str = "", mode: str = "understand") -> TopicModel:
         """Single-shot pipeline: one LLM call produces everything."""
-        prompt = MEGA_PROMPT.format(topic=topic)
+        prompt = MEGA_PROMPT.format(topic=topic, mode=mode)
         if research_context:
             prompt += f"\n\nContext to ground your output:\n{research_context[:2000]}"
 

@@ -6,12 +6,20 @@ import type { Concept, Compression } from '../../types';
 interface ConceptCardProps {
   concepts: Concept[];
   compressions?: Compression[];
+  mode?: string;
 }
 
-export const ConceptCard: React.FC<ConceptCardProps> = ({ concepts, compressions }) => {
+export const ConceptCard: React.FC<ConceptCardProps> = ({ concepts, compressions, mode }) => {
   const [activeLevels, setActiveLevels] = React.useState<Record<string, number>>({});
 
   if (!concepts || concepts.length === 0) return null;
+
+  const getDefaultLevel = () => {
+    if (mode === 'exam') return 3;
+    if (mode === 'overview') return 0;
+    if (mode === 'practice') return 1;
+    return 1;
+  };
 
   return (
     <div className="mb-10">
@@ -19,12 +27,17 @@ export const ConceptCard: React.FC<ConceptCardProps> = ({ concepts, compressions
         <BookOpen className="w-5 h-5 text-purple-400" />
         <h3 className="text-lg font-semibold text-white">Core Concepts</h3>
         <span className="text-xs text-slate-500 font-mono">({concepts.length})</span>
+        {mode === 'exam' && (
+          <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 text-xs border border-red-500/30">
+            🎯 Exam Mode: L3 Expert / Edge Cases Auto-Expanded
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {concepts.map((concept, idx) => {
           const comp = compressions?.find((c) => c.concept_name === concept.name);
-          const level = activeLevels[concept.name] ?? 1;
+          const level = activeLevels[concept.name] ?? getDefaultLevel();
 
           let displayDefinition = concept.definition;
           if (comp) {

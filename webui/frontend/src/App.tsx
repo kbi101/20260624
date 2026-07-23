@@ -180,9 +180,27 @@ export function App() {
                 >
                   <div className="glass-panel p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-extrabold text-white capitalize">
-                        {topicData.topic}
-                      </h2>
+                      <div className="flex items-center space-x-3">
+                        <h2 className="text-2xl font-extrabold text-white capitalize">
+                          {topicData.topic}
+                        </h2>
+                        {(() => {
+                          const currentMode = topicData.mode || 'understand';
+                          const modeBadges: Record<string, { label: string; color: string }> = {
+                            understand: { label: '📖 Understand Mode', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+                            exam: { label: '🎯 Exam Prep Focus', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
+                            practice: { label: '⚡ Practice Workflow', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+                            research: { label: '🔬 Research Dynamics', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
+                            overview: { label: '📋 Taxonomy Overview', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+                          };
+                          const badge = modeBadges[currentMode] || modeBadges.understand;
+                          return (
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-mono border ${badge.color}`}>
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
                       {(() => {
                         if (!topicData.compressions?.length) return null;
                         const tLower = topicData.topic.toLowerCase();
@@ -210,18 +228,46 @@ export function App() {
 
                   <DimensionBars dimensions={topicData.dimensions} />
 
-                  <ConceptCard
-                    concepts={topicData.concepts}
-                    compressions={topicData.compressions}
-                  />
+                  {/* Mode-Driven Layout Reordering */}
+                  {(() => {
+                    const currentMode = topicData.mode || 'understand';
 
-                  <ForceGraphView graph={topicData.graph} edges={topicData.edges} />
+                    const conceptsComponent = (
+                      <ConceptCard
+                        key="concepts"
+                        concepts={topicData.concepts}
+                        compressions={topicData.compressions}
+                        mode={currentMode}
+                      />
+                    );
+                    const graphComponent = (
+                      <ForceGraphView key="graph" graph={topicData.graph} edges={topicData.edges} />
+                    );
+                    const sequenceComponent = (
+                      <SequencePipeline key="sequence" sequenceBlocks={topicData.sequence_blocks} />
+                    );
+                    const loopsComponent = (
+                      <CausalLoopView key="loops" causalLoops={topicData.causal_loops} />
+                    );
+                    const matrixComponent = (
+                      <MatrixGrid key="matrix" matrices={topicData.matrices} />
+                    );
 
-                  <SequencePipeline sequenceBlocks={topicData.sequence_blocks} />
-
-                  <CausalLoopView causalLoops={topicData.causal_loops} />
-
-                  <MatrixGrid matrices={topicData.matrices} />
+                    if (currentMode === 'practice') {
+                      return [sequenceComponent, conceptsComponent, graphComponent, loopsComponent, matrixComponent];
+                    }
+                    if (currentMode === 'research') {
+                      return [loopsComponent, matrixComponent, graphComponent, conceptsComponent, sequenceComponent];
+                    }
+                    if (currentMode === 'exam') {
+                      return [conceptsComponent, matrixComponent, sequenceComponent, loopsComponent, graphComponent];
+                    }
+                    if (currentMode === 'overview') {
+                      return [conceptsComponent, graphComponent, sequenceComponent, loopsComponent, matrixComponent];
+                    }
+                    // Default 'understand'
+                    return [conceptsComponent, graphComponent, sequenceComponent, loopsComponent, matrixComponent];
+                  })()}
 
                   {topicData.references && topicData.references.length > 0 && (
                     <div className="glass-panel p-6">

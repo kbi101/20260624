@@ -466,3 +466,15 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** In cognitive textbook for topic Contango: "The current market price at which a commodity or asset can be bought or sold for immediate delivery"; but in its wiki reference, we have Contango is a situation in which the futures price (or forward price) of a commodity is higher than the spot price., trace our ingestion process to see why the discrepancy.
 
 **A:** Traced pipeline: (1) Ingestion/LLM generation (`uct/generator.py`) correctly produced 7 concepts: Spot Price (1st), Futures Contract (2nd), Cost of Carry (3rd), Contango (4th). Concept #4 "Contango" accurately defined it as futures > spot price; Concept #1 "Spot Price" defined immediate market price. (2) Compressor (`uct/compressor.py`) derived resolution levels for concepts in list order. (3) Bug root cause: UI rendering components (`App.tsx`, `dash.js`, `renderer.py`) naively hardcoded `compressions[0]` for the header essence quote under the main topic title. Since "Spot Price" was concept #0, the UI rendered Spot Price's definition under the title "Contango". (4) Fixed `uct/compressor.py` to prioritize matching topic concepts to index 0, and updated `App.tsx`, `dash.js`, `renderer.py` to dynamically search `compressions` for a concept matching the topic name before falling back to index 0. Rebuilt frontend (`npm run build`).
+
+## 2026-07-23T12:07:48-05:00 — L0-L3 Compression Levels (Depth) vs Mode Explanation
+
+**Q:** Is L0, L1, etc. about depths or Mode?
+
+**A:** Clarified that **L0–L3 are resolution levels of Compression (tied directly to Depth)**: L0 (Essence), L1 (Functional), L2 (Detailed), L3 (Expert). Depth (0 to 3) controls information granularity/zoom level, while **Mode** (Understand, Exam, Practice, Research, Overview) controls pedagogical focus angle (e.g. workflows vs failure modes vs matrices).
+
+## 2026-07-23T12:10:54-05:00 — Mode Generation vs Display Clarification
+
+**Q:** Does the mode dictate knowledge generation or just display?
+
+**A:** Clarified that the engine (`uct/generator.py`) generates a comprehensive single-shot canonical `TopicModel` containing all multi-dimensional panels (concepts, sequence steps, causal loops, matrices, graph edges). **Mode** acts as a pedagogical parameter passed through `UCTEngine` and `UCTRenderer` to dictate display filtering and perspective focus, while **Depth** dictates resolution zoom level (L0 to L3).

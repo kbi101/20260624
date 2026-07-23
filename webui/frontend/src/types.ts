@@ -69,6 +69,7 @@ export interface GraphAdjacency {
 
 export interface TopicModel {
   topic: string;
+  mode?: string;
   dimensions: {
     dominant?: string;
     primary_concepts?: string[];
