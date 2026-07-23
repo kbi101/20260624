@@ -34,6 +34,7 @@ export function App() {
 
   // UCT State
   const [topicData, setTopicData] = useState<TopicModel | null>(null);
+  const [activeMode, setActiveMode] = useState<string>('understand');
   const [isUctLoading, setIsUctLoading] = useState<boolean>(false);
   const [uctError, setUctError] = useState<string | null>(null);
 
@@ -55,6 +56,12 @@ export function App() {
     loadHistGraph();
     loadHistStats();
   }, []);
+
+  useEffect(() => {
+    if (topicData?.mode) {
+      setActiveMode(topicData.mode);
+    }
+  }, [topicData]);
 
   const loadHistory = async () => {
     try {
@@ -86,6 +93,7 @@ export function App() {
   const handleGenerateTopic = async (topic: string, depth: number, mode: string, forceRegenerate = false) => {
     setIsUctLoading(true);
     setUctError(null);
+    setActiveMode(mode);
     try {
       const data = forceRegenerate
         ? await regenerateTopicData(topic, depth, mode)
@@ -162,6 +170,8 @@ export function App() {
                 onGenerate={handleGenerateTopic}
                 isLoading={isUctLoading}
                 currentTopic={topicData?.topic}
+                activeMode={activeMode}
+                onModeChange={setActiveMode}
               />
 
               {uctError && (
@@ -180,26 +190,32 @@ export function App() {
                 >
                   <div className="glass-panel p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
-                      <div className="flex items-center space-x-3">
+                      <div className="flex flex-wrap items-center gap-3">
                         <h2 className="text-2xl font-extrabold text-white capitalize">
                           {topicData.topic}
                         </h2>
-                        {(() => {
-                          const currentMode = topicData.mode || 'understand';
-                          const modeBadges: Record<string, { label: string; color: string }> = {
-                            understand: { label: '📖 Understand Mode', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-                            exam: { label: '🎯 Exam Prep Focus', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
-                            practice: { label: '⚡ Practice Workflow', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-                            research: { label: '🔬 Research Dynamics', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-                            overview: { label: '📋 Taxonomy Overview', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-                          };
-                          const badge = modeBadges[currentMode] || modeBadges.understand;
-                          return (
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-mono border ${badge.color}`}>
-                              {badge.label}
-                            </span>
-                          );
-                        })()}
+                        {/* Interactive Mode Pills */}
+                        <div className="flex items-center space-x-1.5 p-1 rounded-xl bg-white/5 border border-white/10">
+                          {[
+                            { id: 'understand', label: '📖 Understand' },
+                            { id: 'exam', label: '🎯 Exam' },
+                            { id: 'practice', label: '⚡ Practice' },
+                            { id: 'research', label: '🔬 Research' },
+                            { id: 'overview', label: '📋 Overview' },
+                          ].map((m) => (
+                            <button
+                              key={m.id}
+                              onClick={() => setActiveMode(m.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                activeMode === m.id
+                                  ? 'bg-purple-600 text-white font-bold shadow-md shadow-purple-500/30'
+                                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                              }`}
+                            >
+                              {m.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       {(() => {
                         if (!topicData.compressions?.length) return null;
@@ -209,7 +225,7 @@ export function App() {
                         );
                         const essence = match?.level_0_essence || topicData.compressions[0].level_0_essence;
                         return (
-                          <p className="mt-1 text-sm text-purple-300 font-light">
+                          <p className="mt-1.5 text-sm text-purple-300 font-light">
                             "{essence}"
                           </p>
                         );
@@ -219,7 +235,7 @@ export function App() {
                       href={`/api/json?topic=${encodeURIComponent(topicData.topic)}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono text-slate-300 hover:text-white transition-all flex items-center space-x-2"
+                      className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono text-slate-300 hover:text-white transition-all flex items-center space-x-2 shrink-0"
                     >
                       <span>Export Raw JSON</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -230,7 +246,7 @@ export function App() {
 
                   {/* Mode-Driven Layout Reordering */}
                   {(() => {
-                    const currentMode = topicData.mode || 'understand';
+                    const currentMode = activeMode || topicData.mode || 'understand';
 
                     const conceptsComponent = (
                       <ConceptCard

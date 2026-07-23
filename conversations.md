@@ -484,3 +484,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** But when I switch mode, nothing happens.
 
 **A:** Identified that `mode` was previously ignored by the backend serializer (`server.py`) and UI layout (`App.tsx`). Implemented full Mode reactivity: (1) Added `mode` to `MEGA_PROMPT` in `uct/generator.py` so LLM generation aligns with mode guidance. (2) Passed `mode` in `server.py:_generate_full()` API payload. (3) Updated `App.tsx` and `ConceptCard.tsx` so switching mode dynamically updates the header badge (e.g. `🎯 Exam Prep Focus`, `⚡ Practice Workflow`, `🔬 Research Dynamics`), auto-expands default concept levels (e.g. L3 Expert for Exam Mode), and reorders dashboard panels (e.g. prioritizing Sequence Steps for Practice Mode, Causal Loops for Research Mode). Rebuilt frontend, verified in Playwright, committed (`67f6bf4`), and pushed to `origin/main`.
+
+## 2026-07-23T12:17:15-05:00 — Unconstrained Comprehensive Generation Architecture Refactoring
+
+**Q:** When we generate, we want it to be comprehensive hence no need for restriction, but when we display we do to get some focus.
+
+**A:** Exactly aligned with UCT architecture: Refactored `MEGA_PROMPT` in `uct/generator.py` to ensure LLM knowledge generation remains 100% comprehensive and unconstrained across all dimensions/concepts. Kept **Mode** strictly dedicated to client-side display focusing, panel re-ordering, resolution auto-expansion (L0-L3), and perspective highlighting. Committed (`98d9d99`) and pushed to `origin/main`.

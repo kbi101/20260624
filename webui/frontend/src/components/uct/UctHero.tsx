@@ -6,6 +6,8 @@ interface UctHeroProps {
   onGenerate: (topic: string, depth: number, mode: string, forceRegenerate?: boolean) => void;
   isLoading: boolean;
   currentTopic?: string;
+  activeMode?: string;
+  onModeChange?: (mode: string) => void;
 }
 
 const EXAMPLES = [
@@ -16,14 +18,18 @@ const EXAMPLES = [
   'Neural network backpropagation',
 ];
 
-export const UctHero: React.FC<UctHeroProps> = ({ onGenerate, isLoading, currentTopic }) => {
+export const UctHero: React.FC<UctHeroProps> = ({ onGenerate, isLoading, currentTopic, activeMode, onModeChange }) => {
   const [topic, setTopic] = React.useState(currentTopic || '');
   const [depth, setDepth] = React.useState<number>(1);
-  const [mode, setMode] = React.useState<string>('understand');
+  const [mode, setMode] = React.useState<string>(activeMode || 'understand');
 
   React.useEffect(() => {
     if (currentTopic) setTopic(currentTopic);
   }, [currentTopic]);
+
+  React.useEffect(() => {
+    if (activeMode) setMode(activeMode);
+  }, [activeMode]);
 
   const handleSubmit = (e: React.FormEvent, forceRegenerate = false) => {
     e.preventDefault();
@@ -90,7 +96,11 @@ export const UctHero: React.FC<UctHeroProps> = ({ onGenerate, isLoading, current
               <Compass className="w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" />
               <select
                 value={mode}
-                onChange={(e) => setMode(e.target.value)}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  setMode(m);
+                  if (onModeChange) onModeChange(m);
+                }}
                 className="pl-9 pr-8 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
               >
                 <option value="understand" className="bg-slate-900">Mode: Understand</option>
