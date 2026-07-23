@@ -8,9 +8,10 @@ interface UctHeroProps {
   currentTopic?: string;
   activeMode?: string;
   onModeChange?: (mode: string) => void;
+  recentTopics?: string[];
 }
 
-const EXAMPLES = [
+const DEFAULT_EXAMPLES = [
   'TCP congestion control',
   'Transformer attention mechanism',
   'Microservices architecture',
@@ -18,7 +19,7 @@ const EXAMPLES = [
   'Neural network backpropagation',
 ];
 
-export const UctHero: React.FC<UctHeroProps> = ({ onGenerate, isLoading, currentTopic, activeMode, onModeChange }) => {
+export const UctHero: React.FC<UctHeroProps> = ({ onGenerate, isLoading, currentTopic, activeMode, onModeChange, recentTopics }) => {
   const [topic, setTopic] = React.useState(currentTopic || '');
   const [depth, setDepth] = React.useState<number>(1);
   const [mode, setMode] = React.useState<string>(activeMode || 'understand');
@@ -148,23 +149,29 @@ export const UctHero: React.FC<UctHeroProps> = ({ onGenerate, isLoading, current
           </div>
         </form>
 
-        {/* Quick Example Tags */}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <span className="text-xs text-slate-400 font-medium">Try:</span>
-          {EXAMPLES.map((ex) => (
-            <button
-              key={ex}
-              type="button"
-              onClick={() => {
-                setTopic(ex);
-                onGenerate(ex, depth, mode);
-              }}
-              className="px-3 py-1 rounded-full bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/40 text-slate-300 hover:text-purple-300 text-xs transition-all duration-200"
-            >
-              {ex}
-            </button>
-          ))}
-        </div>
+        {/* Quick Recent / Example Tags */}
+        {(() => {
+          const userTopics = (recentTopics || []).filter(Boolean);
+          const filled = [...userTopics, ...DEFAULT_EXAMPLES.filter((d) => !userTopics.includes(d))].slice(0, 5);
+          return (
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Try:</span>
+              {filled.map((ex) => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => {
+                    setTopic(ex);
+                    onGenerate(ex, depth, mode);
+                  }}
+                  className="px-3 py-1 rounded-full bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/40 text-slate-300 hover:text-purple-300 text-xs transition-all duration-200 capitalize"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       </motion.div>
     </div>
   );

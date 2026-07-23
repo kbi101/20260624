@@ -172,6 +172,7 @@ export function App() {
                 currentTopic={topicData?.topic}
                 activeMode={activeMode}
                 onModeChange={setActiveMode}
+                recentTopics={historyList.map((h) => h.topic).slice(0, 5)}
               />
 
               {uctError && (
