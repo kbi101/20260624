@@ -508,3 +508,9 @@ Results fetching now fetches up to `max_results*3` raw articles, filters ads/ads
 **Q:** In the control board, the Try: should show last 5 topics researched.
 
 **A:** Updated `UctHero.tsx` and `App.tsx` so the `Try:` quick tag section dynamically displays the user's **last 5 topics researched** (sorted by timestamp descending from research history) with fallback example topics. Clicking any tag instantly loads or generates that topic dashboard. Rebuilt frontend (`npm run build`), verified in Playwright (`Contango`, `TCP Congestion Control`, `Least Privilege In AWS Cloud Infrastructure`, `Enterprise Architect Toolings`, `Enterprise Architect Roles And Responsibilities`), committed (`0a7594e`), and pushed to `origin/main`.
+
+## 2026-07-23T12:31:24-05:00 — Textbook History Scoping Fix
+
+**Q:** History is only associated with textbook, not Hist Graph.
+
+**A:** Scoped History exclusively to the Cognitive Textbook view: (1) Updated `Header.tsx` to rename the button to **Textbook History** and render it only when `activeTab === 'uct'` (hidden when inspecting HIST Graph). (2) Updated `HistoryDrawer.tsx` copy to *Textbook History / Saved cognitive textbook research topics*. (3) Ensured selecting any topic from the drawer automatically switches active view tab to Cognitive Textbook (`uct`). Rebuilt frontend (`npm run build`), verified in Playwright, committed (`49b7015`), and pushed to `origin/main`.
